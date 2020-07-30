@@ -20,7 +20,7 @@ if [ -z "$1" ]; then
 fi
 
 nvidia-docker run -it --rm \
-    --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 \
-    -v $(pwd)/weights/:/model/ \
+    --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --privileged \
+    -v /shared/model/:/model/ \
     -v "${1}":/data/ \
     joc_tensorflow_maskrcnn:tf1.x-py3
