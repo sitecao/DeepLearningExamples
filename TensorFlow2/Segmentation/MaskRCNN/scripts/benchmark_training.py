@@ -22,7 +22,7 @@ import subprocess
 def main():
     # CLI flags
     parser = argparse.ArgumentParser(description="MaskRCNN train benchmark")
-    parser.add_argument('--gpus', type=int, required=True)
+    parser.add_argument('--nodes', type=int, required=True)
     parser.add_argument('--batch_size', type=int, required=True)
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--data_dir', type=str, default='/data')
@@ -34,7 +34,7 @@ def main():
 
     # build command
     cmd = (
-        f'horovodrun -np {flags.gpus} '
+        f'herringrun -n {flags.nodes} '
         f'python {main_path}'
         f' --mode train'
         f' --model_dir "{flags.model_dir}"'

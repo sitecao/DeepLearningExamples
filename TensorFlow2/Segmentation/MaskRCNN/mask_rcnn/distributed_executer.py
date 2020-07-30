@@ -40,8 +40,8 @@ from mask_rcnn.utils.distributed_utils import MPI_rank
 from mask_rcnn.hooks.logging_hook import AutoLoggingHook
 
 from mask_rcnn.utils.lazy_imports import LazyImport
-hvd = LazyImport("horovod.tensorflow")
-
+# hvd = LazyImport("horovod.tensorflow")
+hvd = LazyImport("herring.tensorflow")
 from tensorflow.core.protobuf import rewriter_config_pb2
 
 from mask_rcnn import evaluation
@@ -480,9 +480,9 @@ class EstimatorExecuter(BaseExecuter):
       os.environ['HOROVOD_NUM_NCCL_STREAMS'] = '1'
       # os.environ['HOROVOD_AUTOTUNE'] = '2'
 
-      hvd.init()
+      # hvd.init()
 
-      logging.info("Horovod successfully initialized ...")
+      logging.info("Herring successfully initialized ...")
 
     os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
     os.environ['TF_GPU_THREAD_COUNT'] = '1' if not MPI_is_distributed() else str(hvd.size())
