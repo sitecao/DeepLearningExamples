@@ -422,7 +422,8 @@ class BaseExecuter(object):
 
       if MPI_is_distributed():
           from mpi4py import MPI
-          MPI.COMM_WORLD.Barrier()  # Waiting for all MPI processes to sync
+          comm = hvd.get_worker_comm()
+          comm.Barrier()  # Waiting for all MPI processes to sync
 
     return eval_results
 
