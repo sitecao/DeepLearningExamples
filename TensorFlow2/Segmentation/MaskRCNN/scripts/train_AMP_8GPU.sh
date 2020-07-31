@@ -34,10 +34,10 @@ herringsinglenode \
         --checkpoint="/shared/model/resnet/resnet-nhwc-2018-02-07/model.ckpt-112603" \
         --eval_samples=5000 \
         --init_learning_rate=0.04 \
-        --learning_rate_steps="30000,40000" \
+        --learning_rate_steps="3750,5000" \
         --model_dir="/shared/results/" \
-        --num_steps_per_eval=3696 \
-        --total_steps=45000 \
+        --num_steps_per_eval=462 \
+        --total_steps=5625 \
         --train_batch_size=4 \
         --eval_batch_size=8 \
         --training_file_pattern="/shared/data/train*.tfrecord" \
