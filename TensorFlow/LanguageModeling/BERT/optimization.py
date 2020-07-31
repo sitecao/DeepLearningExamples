@@ -94,7 +94,7 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None,
           exclude_from_weight_decay=["LayerNorm", "layer_norm", "bias"])
 
   if hvd is not None and (num_accumulation_steps == 1 or (not allreduce_post_accumulation)):
-    optimizer = hvd.DistributedOptimizer(optimizer, sparse_as_dense=True, compression=Compression.fp16 if use_fp16 or manual_fp16 else Compression.none)
+    optimizer = hvd.DistributedOptimizer(optimizer)
   if use_fp16:
     loss_scaler = tf.train.experimental.DynamicLossScale(initial_loss_scale=init_loss_scale, increment_period=1000, multiplier=2.0)
     optimizer = tf.train.experimental.enable_mixed_precision_graph_rewrite(optimizer, loss_scaler)
@@ -148,17 +148,16 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None,
 
       def update(accum_vars):
           if allreduce_post_accumulation and hvd is not None:
-              accum_vars = [hvd.allreduce(tf.convert_to_tensor(accum_var), compression=Compression.fp16 if use_fp16 or manual_fp16 else Compression.none) if isinstance(accum_var, tf.IndexedSlices)
-                            else hvd.allreduce(accum_var, compression=Compression.fp16 if use_fp16 or manual_fp16 else Compression.none) for accum_var in accum_vars]
+              accum_vars = [hvd.allreduce(g, param_index=idx, num_params=len(accum_vars)) for idx, g in enumerate(accum_vars)]
           return optimizer.apply_gradients(list(zip(accum_vars, tvars)), global_step=global_step)
 
       update_step = tf.identity(tf.cast(tf.math.equal(local_step % num_accumulation_steps, 0), dtype=tf.bool), name="update_step")
       update_op = tf.cond(update_step,
                           lambda: update(accum_vars), lambda: tf.no_op())
 
-      new_global_step = tf.cond(tf.math.logical_and(update_step, 
-                                                    tf.cast(hvd.allreduce(tf.cast(batch_finite, tf.int32)), tf.bool) if hvd is not None else batch_finite),
-                                lambda: global_step+1,
+      new_global_step = tf.cond(tf.math.logical_and(update_step, tf.cast(
+                        hvd.oob_allreduce(tf.cast(batch_finite, tf.int32)), tf.bool)),
+                                lambda: global_step + 1,
                                 lambda: global_step)
       new_global_step = tf.identity(new_global_step, name='step_update')
       train_op = tf.group(update_op, [global_step.assign(new_global_step)])
