@@ -315,10 +315,8 @@ class LoggingBackend(object):
         self.log_info("Average throughput: {throughput:.1f} samples/sec".format(throughput=avg_throughput))
         self.log_info("Total processed steps: {total_steps}".format(total_steps=total_steps))
         self.log_info(
-            processing_time_prefix + "Total processing time: {hours}h {minutes:02d}m {seconds:02d}s".format(
-                hours=total_processing_hours,
-                minutes=int(total_processing_minutes),
-                seconds=int(total_processing_seconds)
+            processing_time_prefix + "Total processing time: {seconds} seconds".format(
+                seconds=int(total_processing_time)
             )
         )
 
