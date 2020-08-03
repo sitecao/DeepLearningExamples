@@ -553,8 +553,8 @@ def main(_):
     raise ValueError("At least one of `do_train` or `do_eval` must be True.")
 
   if FLAGS.horovod:
-    import horovod.tensorflow as hvd
-    hvd.init()
+    import herring.tensorflow as hvd
+    # hvd.init()
 
   bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
 

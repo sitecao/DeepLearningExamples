@@ -26,6 +26,7 @@ import re
 import numpy as np
 import six
 import tensorflow as tf
+import herring.tensorflow as herring
 
 from gpu_environment import get_custom_getter
 
@@ -890,6 +891,8 @@ def transformer_model(input_tensor,
             kernel_initializer=create_initializer(initializer_range))
         layer_output = dropout(layer_output, hidden_dropout_prob)
         layer_output = layer_norm(layer_output + attention_output)
+        if layer_idx % 4 == 0:  # Break XLA
+            layer_output = herring.overlap(layer_output)
         prev_output = layer_output
         all_layer_outputs.append(layer_output)
 

@@ -17,6 +17,7 @@
 
 import os
 import sys
+import herring.tensorflow as hr
 
 __all__ = ["MPI_local_rank", "MPI_rank", "MPI_size", "MPI_rank_and_size", "MPI_is_distributed"]
 
@@ -26,40 +27,41 @@ def MPI_is_distributed():
     :return: bool
     """
 
-    if all([var in os.environ for var in ["OMPI_COMM_WORLD_RANK", "OMPI_COMM_WORLD_SIZE"]]):
-        return True
+    return True
 
-    elif all([var in os.environ for var in ["SLURM_PROCID", "SLURM_NTASKS"]]):
-        return True
-
-    else:
-        return False
+    # if all([var in os.environ for var in ["OMPI_COMM_WORLD_RANK", "OMPI_COMM_WORLD_SIZE"]]):
+    #     return True
+    #
+    # elif all([var in os.environ for var in ["SLURM_PROCID", "SLURM_NTASKS"]]):
+    #     return True
+    #
+    # else:
+    #     return False
 
 
 def MPI_local_rank():
-
-    if "OMPI_COMM_WORLD_LOCAL_RANK" in os.environ:
-        return int(os.environ.get("OMPI_COMM_WORLD_LOCAL_RANK"))
-
-    elif "SLURM_LOCALID" in os.environ:
-        return int(os.environ.get("SLURM_LOCALID"))
-
-    else:
-        return 0
-
+    return hr.local_rank()
+    # if "OMPI_COMM_WORLD_LOCAL_RANK" in os.environ:
+    #     return int(os.environ.get("OMPI_COMM_WORLD_LOCAL_RANK"))
+    # elif "SLURM_LOCALID" in os.environ:
+    #     return int(os.environ.get("SLURM_LOCALID"))
+    # else:
+    #     return 0
 
 def MPI_rank():
-    return MPI_rank_and_size()[0]
+    return hr.rank()
+    # return MPI_rank_and_size()[0]
 
 
 def MPI_size():
-    return MPI_rank_and_size()[1]
+    return hr.size()
+    # return MPI_rank_and_size()[1]
 
 
 def MPI_rank_and_size():
 
     if "tensorflow" in sys.modules:
-        return mpi_env_MPI_rank_and_size()
+        return MPI_rank(), MPI_size()
 
     else:
         return 0, 1

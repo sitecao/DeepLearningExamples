@@ -49,7 +49,7 @@ from mask_rcnn.utils.meters import StandardMeter
 from mask_rcnn.utils.metric_tracking import register_metric
 
 from mask_rcnn.utils.lazy_imports import LazyImport
-hvd = LazyImport("horovod.tensorflow")
+hvd = LazyImport("herring.tensorflow")
 
 MODELS = dict()
 
@@ -66,8 +66,8 @@ def create_optimizer(learning_rate, params):
             device_dense='/gpu:0',
             device_sparse='',
             # compression=hvd.Compression.fp16,
-            compression=hvd.Compression.none,
-            sparse_as_dense=False
+            # compression=hvd.Compression.none,
+            # sparse_as_dense=False
         )
 
     if params["amp"]:

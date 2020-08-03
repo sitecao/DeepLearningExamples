@@ -14,8 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-mkdir -p /model
-cd /model
+cd /shared/model
 
 # DOWNLOAD CHECKPOINTS
 
@@ -48,26 +47,26 @@ wget -N ${BASE_URL}/model.ckpt-112603.meta -P ${DEST_DIR}
 # VERIFY CHECKPOINTS
 echo "Verifying and Processing Checkpoints..."
 
-python pb_to_ckpt.py \
+python /shared/DeepLearningExamples/TensorFlow2/Segmentation/MaskRCNN/weights/pb_to_ckpt.py \
     --frozen_model_filename=mask-rcnn/1555659850/ \
     --output_filename=mask-rcnn/1555659850/ckpt/model.ckpt
 
-python extract_RN50_weights.py \
+python /shared/DeepLearningExamples/TensorFlow2/Segmentation/MaskRCNN/weights/extract_RN50_weights.py \
     --checkpoint_dir=mask-rcnn/1555659850/ckpt/model.ckpt \
     --save_to=resnet/extracted_from_maskrcnn
 
 echo "Generating list of tensors and their shape..."
 
-python inspect_checkpoint.py --file_name=mask-rcnn/1555659850/ckpt/model.ckpt \
+python /shared/DeepLearningExamples/TensorFlow2/Segmentation/MaskRCNN/weights/inspect_checkpoint.py --file_name=mask-rcnn/1555659850/ckpt/model.ckpt \
     > mask-rcnn/1555659850/tensors_and_shape.txt
 
-python inspect_checkpoint.py --file_name=resnet/resnet-nhwc-2018-02-07/model.ckpt-112603 \
+python /shared/DeepLearningExamples/TensorFlow2/Segmentation/MaskRCNN/weights/inspect_checkpoint.py --file_name=resnet/resnet-nhwc-2018-02-07/model.ckpt-112603 \
     > resnet/resnet-nhwc-2018-02-07/tensors_and_shape.txt
 
 #python inspect_checkpoint.py --file_name=resnet/resnet-nhwc-2018-10-14/model.ckpt-112602 \
 #    > resnet/resnet-nhwc-2018-10-14/tensors_and_shape.txt
 
-python inspect_checkpoint.py --file_name=resnet/extracted_from_maskrcnn/resnet50.ckpt \
+python /shared/DeepLearningExamples/TensorFlow2/Segmentation/MaskRCNN/weights/inspect_checkpoint.py --file_name=resnet/extracted_from_maskrcnn/resnet50.ckpt \
     > resnet/extracted_from_maskrcnn/tensors_and_shape.txt
 
 echo "Script Finished with Success"

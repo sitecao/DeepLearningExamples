@@ -54,4 +54,3 @@ RUN \
     unzip -u protoc-3.3.0-linux-x86_64.zip -d protoc3 && \
     mv protoc3/bin/* /usr/local/bin/ && \
     mv protoc3/include/* /usr/local/include/
-

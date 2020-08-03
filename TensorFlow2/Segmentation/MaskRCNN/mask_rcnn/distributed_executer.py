@@ -40,8 +40,8 @@ from mask_rcnn.utils.distributed_utils import MPI_rank
 from mask_rcnn.hooks.logging_hook import AutoLoggingHook
 
 from mask_rcnn.utils.lazy_imports import LazyImport
-hvd = LazyImport("horovod.tensorflow")
-
+# hvd = LazyImport("horovod.tensorflow")
+hvd = LazyImport("herring.tensorflow")
 from tensorflow.core.protobuf import rewriter_config_pb2
 
 from mask_rcnn import evaluation
@@ -72,7 +72,7 @@ def get_training_hooks(mode, model_dir, checkpoint_path=None, skip_checkpoint_va
         ))
 
     if MPI_is_distributed() and mode == "train":
-        training_hooks.append(hvd.BroadcastGlobalVariablesHook(root_rank=0))
+        training_hooks.append(hvd.BroadcastGlobalVariablesHook(root=0))
 
     if not MPI_is_distributed() or MPI_rank() == 0:
         training_hooks.append(CheckpointSaverHook(
@@ -422,7 +422,8 @@ class BaseExecuter(object):
 
       if MPI_is_distributed():
           from mpi4py import MPI
-          MPI.COMM_WORLD.Barrier()  # Waiting for all MPI processes to sync
+          comm = hvd.get_worker_comm()
+          comm.Barrier()  # Waiting for all MPI processes to sync
 
     return eval_results
 
@@ -480,9 +481,9 @@ class EstimatorExecuter(BaseExecuter):
       os.environ['HOROVOD_NUM_NCCL_STREAMS'] = '1'
       # os.environ['HOROVOD_AUTOTUNE'] = '2'
 
-      hvd.init()
+      # hvd.init()
 
-      logging.info("Horovod successfully initialized ...")
+      logging.info("Herring successfully initialized ...")
 
     os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
     os.environ['TF_GPU_THREAD_COUNT'] = '1' if not MPI_is_distributed() else str(hvd.size())

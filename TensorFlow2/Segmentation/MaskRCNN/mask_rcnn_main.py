@@ -92,7 +92,7 @@ def main(argv):
     # ============================ Configure parameters ============================ #
 
     if RUN_CONFIG.use_tf_distributed and MPI_is_distributed():
-        raise RuntimeError("Incompatible Runtime. Impossible to use `--use_tf_distributed` with MPIRun Horovod")
+        raise RuntimeError("Incompatible Runtime. Impossible to use `--use_tf_distributed` with herringrun")
 
     if RUN_CONFIG.mode in ('train', 'train_and_eval') and not RUN_CONFIG.training_file_pattern:
         raise RuntimeError('You must specify `training_file_pattern` for training.')
@@ -125,7 +125,7 @@ def main(argv):
     else:
         train_input_fn = None
 
-    if RUN_CONFIG.mode in ('eval', 'train_and_eval' or (RUN_CONFIG.mode == 'train' and RUN_CONFIG.eval_after_training)):
+    if RUN_CONFIG.mode in ('eval', 'train_and_eval') or (RUN_CONFIG.mode == 'train' and RUN_CONFIG.eval_after_training):
 
         eval_input_fn = dataloader.InputReader(
             file_pattern=RUN_CONFIG.validation_file_pattern,
