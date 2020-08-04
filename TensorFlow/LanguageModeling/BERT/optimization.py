@@ -25,7 +25,6 @@ import tensorflow as tf
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import linalg_ops
 from tensorflow.python.ops import math_ops
-from horovod.tensorflow.compression import Compression
 
 def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None, manual_fp16=False, use_fp16=False, num_accumulation_steps=1,
                      optimizer_type="adam", allreduce_post_accumulation=False, init_loss_scale=2**32):

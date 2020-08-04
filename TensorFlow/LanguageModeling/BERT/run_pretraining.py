@@ -112,7 +112,7 @@ flags.DEFINE_bool(
     "verbose_logging", False,
     "If true, all of the trainable parameters are printed")
 
-flags.DEFINE_bool("horovod", False, "Whether to use Horovod for multi-gpu runs")
+flags.DEFINE_bool("herring", False, "Whether to use Herring for multi-gpu runs")
 
 flags.DEFINE_bool("report_loss", True, "Whether to report total loss during training.")
 
@@ -552,7 +552,7 @@ def main(_):
   if not FLAGS.do_train and not FLAGS.do_eval:
     raise ValueError("At least one of `do_train` or `do_eval` must be True.")
 
-  if FLAGS.horovod:
+  if FLAGS.herring:
     import herring.tensorflow as hvd
     # hvd.init()
 
@@ -564,14 +564,14 @@ def main(_):
   for input_file_dir in FLAGS.input_files_dir.split(","):
     input_files.extend(tf.io.gfile.glob(os.path.join(input_file_dir, "*")))
 
-  if FLAGS.horovod and len(input_files) < hvd.size():
+  if FLAGS.herring and len(input_files) < hvd.size():
       raise ValueError("Input Files must be sharded")
   if FLAGS.amp and FLAGS.manual_fp16:
       raise ValueError("AMP and Manual Mixed Precision Training are both activated! Error")
 
   is_per_host = tf.contrib.tpu.InputPipelineConfig.PER_HOST_V2
   config = tf.compat.v1.ConfigProto()
-  if FLAGS.horovod:
+  if FLAGS.herring:
     config.gpu_options.visible_device_list = str(hvd.local_rank())
     if hvd.rank() == 0:
       tf.compat.v1.logging.info("***** Configuaration *****")
@@ -589,8 +589,8 @@ def main(_):
   run_config = tf.estimator.RunConfig(
       model_dir=FLAGS.output_dir,
       session_config=config,
-      save_checkpoints_steps=FLAGS.save_checkpoints_steps if not FLAGS.horovod or hvd.rank() == 0 else None,
-      save_summary_steps=FLAGS.save_checkpoints_steps if not FLAGS.horovod or hvd.rank() == 0 else None,
+      save_checkpoints_steps=FLAGS.save_checkpoints_steps if not FLAGS.herring or hvd.rank() == 0 else None,
+      save_summary_steps=FLAGS.save_checkpoints_steps if not FLAGS.herring or hvd.rank() == 0 else None,
       # This variable controls how often estimator reports examples/sec.
       # Default value is every 100 steps.
       # When --report_loss is True, we set to very large value to prevent
@@ -601,11 +601,11 @@ def main(_):
   model_fn = model_fn_builder(
       bert_config=bert_config,
       init_checkpoint=FLAGS.init_checkpoint,
-      learning_rate=FLAGS.learning_rate if not FLAGS.horovod else FLAGS.learning_rate*hvd.size(),
+      learning_rate=FLAGS.learning_rate if not FLAGS.herring else FLAGS.learning_rate*hvd.size(),
       num_train_steps=FLAGS.num_train_steps,
       num_warmup_steps=FLAGS.num_warmup_steps,
       use_one_hot_embeddings=False,
-      hvd=None if not FLAGS.horovod else hvd)
+      hvd=None if not FLAGS.herring else hvd)
 
   estimator = tf.estimator.Estimator(
       model_fn=model_fn,
@@ -614,10 +614,10 @@ def main(_):
   if FLAGS.do_train:
 
     training_hooks = []
-    if FLAGS.horovod and hvd.size() > 1:
+    if FLAGS.herring and hvd.size() > 1:
       training_hooks.append(hvd.BroadcastGlobalVariablesHook(0))
-    if (not FLAGS.horovod or hvd.rank() == 0):
-      global_batch_size = FLAGS.train_batch_size * FLAGS.num_accumulation_steps if not FLAGS.horovod else FLAGS.train_batch_size * FLAGS.num_accumulation_steps * hvd.size()
+    if (not FLAGS.herring or hvd.rank() == 0):
+      global_batch_size = FLAGS.train_batch_size * FLAGS.num_accumulation_steps if not FLAGS.herring else FLAGS.train_batch_size * FLAGS.num_accumulation_steps * hvd.size()
       training_hooks.append(_LogSessionRunHook(global_batch_size, FLAGS.num_accumulation_steps, dllogging, FLAGS.display_loss_steps, FLAGS.save_checkpoints_steps, FLAGS.report_loss))
 
     tf.compat.v1.logging.info("***** Running training *****")
@@ -628,13 +628,13 @@ def main(_):
         max_seq_length=FLAGS.max_seq_length,
         max_predictions_per_seq=FLAGS.max_predictions_per_seq,
         is_training=True,
-        hvd=None if not FLAGS.horovod else hvd)
+        hvd=None if not FLAGS.herring else hvd)
 
     train_start_time = time.time()
     estimator.train(input_fn=train_input_fn, hooks=training_hooks, max_steps=FLAGS.num_train_steps)
     train_time_elapsed = time.time() - train_start_time
 
-    if (not FLAGS.horovod or hvd.rank() == 0):
+    if (not FLAGS.herring or hvd.rank() == 0):
         train_time_wo_overhead = training_hooks[-1].total_time
         avg_sentences_per_second = FLAGS.num_train_steps * global_batch_size * 1.0 / train_time_elapsed
         ss_sentences_per_second = (FLAGS.num_train_steps - training_hooks[-1].skipped) * global_batch_size * 1.0 / train_time_wo_overhead
@@ -644,12 +644,12 @@ def main(_):
                         FLAGS.num_train_steps * global_batch_size)
         tf.compat.v1.logging.info("Total Training Time W/O Overhead = %0.2f for Sentences = %d", train_time_wo_overhead,
                         (FLAGS.num_train_steps - training_hooks[-1].skipped) * global_batch_size)
-        tf.compat.v1.logging.info("Throughput Average (sentences/sec) with overhead = %0.2f", avg_sentences_per_second)
-        tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+        tf.compat.v1.logging.info("Training Throughput Average (sentences/sec) with overhead = %0.2f", avg_sentences_per_second)
+        tf.compat.v1.logging.info("Training Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
         dllogging.logger.log(step=(), data={"throughput_train": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
         tf.compat.v1.logging.info("-----------------------------")
 
-  if FLAGS.do_eval and (not FLAGS.horovod or hvd.rank() == 0):
+  if FLAGS.do_eval and (not FLAGS.herring or hvd.rank() == 0):
     tf.compat.v1.logging.info("***** Running evaluation *****")
     tf.compat.v1.logging.info("  Batch size = %d", FLAGS.eval_batch_size)
 
@@ -663,7 +663,7 @@ def main(_):
         max_seq_length=FLAGS.max_seq_length,
         max_predictions_per_seq=FLAGS.max_predictions_per_seq,
         is_training=False,
-        hvd=None if not FLAGS.horovod else hvd)
+        hvd=None if not FLAGS.herring else hvd)
 
     eval_hooks = [LogEvalRunHook(FLAGS.eval_batch_size)]
     eval_start_time = time.time()
@@ -688,7 +688,7 @@ def main(_):
     tf.compat.v1.logging.info("Batch size = %d", FLAGS.eval_batch_size)
     tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
     tf.compat.v1.logging.info("Precision = %s", "fp16" if FLAGS.amp else "fp32")
-    tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+    tf.compat.v1.logging.info("Inference Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
     dllogging.logger.log(step=(), data={"throughput_val": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
     tf.compat.v1.logging.info("-----------------------------")
 

@@ -18,7 +18,7 @@
 	--num_warmup_steps=2800 \
 	--save_checkpoints_steps=7820 \
 	--learning_rate=0.390625e-5 \
-	--horovod \
+	--herring \
 	--manual_fp16 \
 	--amp=false \
 	--use_xla \
