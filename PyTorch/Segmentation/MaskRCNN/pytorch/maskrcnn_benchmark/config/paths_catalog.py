@@ -5,7 +5,7 @@ import os
 
 
 class DatasetCatalog(object):
-    DATA_DIR = "/shared/data"
+    DATA_DIR = "/scratch/data/mask_rcnn/pytorch"
     DATASETS = {
         "coco_2017_train": {
             "img_dir": "train2017",
