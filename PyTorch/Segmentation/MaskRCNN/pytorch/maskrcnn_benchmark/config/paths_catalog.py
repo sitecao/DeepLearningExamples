@@ -5,7 +5,7 @@ import os
 
 
 class DatasetCatalog(object):
-    DATA_DIR = "/shared/mask-rcnn-train-dataset"
+    DATA_DIR = "/shared/data"
     DATASETS = {
         "coco_2017_train": {
             "img_dir": "train2017",
