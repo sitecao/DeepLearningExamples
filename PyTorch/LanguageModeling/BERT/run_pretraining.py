@@ -44,7 +44,9 @@ from schedulers import PolyWarmUpScheduler
 
 from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from utils import is_main_process, format_step, get_world_size, get_rank
-from apex.parallel import DistributedDataParallel as DDP
+#from apex.parallel import DistributedDataParallel as DDP
+import herring.torch as herring
+from herring.torch.parallel import DistributedDataParallel as DDP
 from schedulers import LinearWarmUpScheduler
 from apex.parallel.distributed import flat_dist_call
 import amp_C
@@ -83,7 +85,7 @@ def create_pretraining_dataset(input_file, max_pred_length, shared_list, args, w
     train_data = pretraining_dataset(input_file=input_file, max_pred_length=max_pred_length)
     train_sampler = RandomSampler(train_data)
     train_dataloader = DataLoader(train_data, sampler=train_sampler,
-                                  batch_size=args.train_batch_size * args.n_gpu, 
+                                  batch_size=args.train_batch_size * args.n_gpu,
                                   num_workers=4, worker_init_fn=worker_init,
                                   pin_memory=True)
     return train_dataloader, input_file
@@ -198,7 +200,7 @@ def parse_arguments():
                              "E.g., 0.1 = 10%% of training.")
     parser.add_argument("--local_rank",
                         type=int,
-                        default=os.getenv('LOCAL_RANK', -1),
+                        default=herring.get_local_rank(),
                         help="local_rank for distributed training on gpus")
     parser.add_argument('--seed',
                         type=int,
@@ -284,7 +286,7 @@ def parse_arguments():
 
     if args.steps_this_run < 0:
         args.steps_this_run = args.max_steps
-    
+
     return args
 
 def setup_training(args):
@@ -300,13 +302,13 @@ def setup_training(args):
         torch.cuda.set_device(args.local_rank)
         device = torch.device("cuda", args.local_rank)
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-        torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        # torch.distributed.init_process_group(backend='nccl', init_method='env://')
         args.n_gpu = 1
-        
+
     if args.gradient_accumulation_steps == 1:
         args.allreduce_post_accumulation = False
         args.allreduce_post_accumulation_fp16 = False
-        
+
     if is_main_process():
         dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
                                                            filename=args.json_summary),
@@ -366,7 +368,7 @@ def prepare_model_and_optimizer(args, device):
             checkpoint = torch.load(args.init_checkpoint, map_location="cpu")
 
         model.load_state_dict(checkpoint['model'], strict=False)
-        
+
         if args.phase2 and not args.init_checkpoint:
             global_step -= args.phase1_end_step
         if is_main_process():
@@ -375,15 +377,15 @@ def prepare_model_and_optimizer(args, device):
     model.to(device)
     param_optimizer = list(model.named_parameters())
     no_decay = ['bias', 'gamma', 'beta', 'LayerNorm']
-    
+
     optimizer_grouped_parameters = [
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}]
 
-    optimizer = FusedLAMB(optimizer_grouped_parameters, 
+    optimizer = FusedLAMB(optimizer_grouped_parameters,
                           lr=args.learning_rate)
-    lr_scheduler = PolyWarmUpScheduler(optimizer, 
-                                       warmup=args.warmup_proportion, 
+    lr_scheduler = PolyWarmUpScheduler(optimizer,
+                                       warmup=args.warmup_proportion,
                                        total_steps=args.max_steps)
     if args.fp16:
 
@@ -418,9 +420,10 @@ def prepare_model_and_optimizer(args, device):
 
     if args.local_rank != -1:
         if not args.allreduce_post_accumulation:
-            model = DDP(model, message_size=250000000, gradient_predivide_factor=get_world_size())
+            # model = DDP(model, message_size=250000000, gradient_predivide_factor=get_world_size())
+            model = DDP(model)
         else:
-            flat_dist_call([param.data for param in model.parameters()], torch.distributed.broadcast, (0,) )
+            flat_dist_call([param.data for param in model.parameters()], herring.broadcast, (0,) )
     elif args.n_gpu > 1:
         model = torch.nn.DataParallel(model)
 
@@ -448,7 +451,7 @@ def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
             [master_grads, allreduced_views],
             loss_scale / (get_world_size() * args.gradient_accumulation_steps))
         # 3. sum gradient across ranks. Because of the predivision, this averages the gradient
-        torch.distributed.all_reduce(flat_raw)
+        herring.all_reduce(flat_raw)
         # 4. combine unscaling and unflattening of allreduced gradient
         overflow_buf.zero_()
         amp_C.multi_tensor_scale(65536,
@@ -492,7 +495,7 @@ def main():
     global timeout_sent
 
     args = parse_arguments()
-        
+
     random.seed(args.seed + args.local_rank)
     np.random.seed(args.seed + args.local_rank)
     torch.manual_seed(args.seed + args.local_rank)
@@ -545,7 +548,7 @@ def main():
 
             shared_file_list = {}
 
-            if torch.distributed.is_initialized() and get_world_size() > num_files:
+            if get_world_size() > num_files:
                 remainder = get_world_size() % num_files
                 data_file = files[(f_start_id*get_world_size()+get_rank() + remainder*f_start_id)%num_files]
             else:
@@ -569,13 +572,12 @@ def main():
             if args.allreduce_post_accumulation:
                 overflow_buf = torch.cuda.IntTensor([0])
 
-            for f_id in range(f_start_id + 1 , len(files)):
-                
-   
+            for f_id in range(f_start_id + 1, len(files)):
+
                 if get_world_size() > num_files:
-                    data_file = files[(f_id*get_world_size()+get_rank() + remainder*f_id)%num_files]
+                    data_file = files[(f_id*get_world_size()+get_rank() + remainder*f_id) % num_files]
                 else:
-                    data_file = files[(f_id*get_world_size()+get_rank())%num_files]
+                    data_file = files[(f_id*get_world_size()+get_rank()) % num_files]
 
                 previous_file = data_file
 
@@ -618,9 +620,10 @@ def main():
                         last_num_steps = args.log_freq if last_num_steps == 0 else last_num_steps
                         average_loss = torch.tensor(average_loss, dtype=torch.float32).cuda()
                         average_loss = average_loss / (last_num_steps * divisor)
-                        if (torch.distributed.is_initialized()):
-                            average_loss /= get_world_size()
-                            torch.distributed.all_reduce(average_loss)
+                        # if (torch.distributed.is_initialized()):
+                        average_loss /= get_world_size()
+                        herring.all_reduce(average_loss)
+                        # torch.distributed.all_reduce(average_loss)
                         final_loss = average_loss.item()
                         if is_main_process():
                             dllogger.log(step=(epoch, global_step, ), data={"final_loss": final_loss})
@@ -680,8 +683,8 @@ if __name__ == "__main__":
     global_step += args.phase1_end_step if (args.phase2 and args.resume_step > 0) else 0
     if args.resume_step == -1:
         args.resume_step = 0
-    if torch.distributed.is_initialized():
-        gpu_count = get_world_size()
+    # if torch.distributed.is_initialized():
+    gpu_count = get_world_size()
     if is_main_process():
         e2e_time = time.time() - now
         training_perf = args.train_batch_size * args.gradient_accumulation_steps * gpu_count\
