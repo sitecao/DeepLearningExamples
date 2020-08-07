@@ -146,8 +146,9 @@ def do_train(
 
     total_training_time = time.time() - start_training_time
     total_time_str = str(datetime.timedelta(seconds=total_training_time))
+    iteration_per_sec = total_training_time / max_iter
     logger.info(
-        "Total training time: {} ({:.4f} s / it)".format(
-            total_time_str, total_training_time / (max_iter)
+        "Total training time: {} ({:.4f} s / it) throughput: {:.2f} FPS".format(
+            total_time_str, iteration_per_sec, int(cfg.SOLVER.IMS_PER_BATCH) / iteration_per_sec
         )
     )
