@@ -86,7 +86,7 @@ def do_train(
 
         # Note: If mixed precision is not used, this ends up doing nothing
         # Otherwise apply loss scaling for mixed-precision recipe
-        if use_amp:        
+        if use_amp:
             with amp.scale_loss(losses, optimizer) as scaled_losses:
                 scaled_losses.backward()
         else:
@@ -146,8 +146,10 @@ def do_train(
 
     total_training_time = time.time() - start_training_time
     total_time_str = str(datetime.timedelta(seconds=total_training_time))
+    sec_per_iteration = total_training_time / max_iter
+    samples_per_sec = int(cfg.SOLVER.IMS_PER_BATCH) / sec_per_iteration
     logger.info(
-        "Total training time: {} ({:.4f} s / it)".format(
-            total_time_str, total_training_time / (max_iter)
+        "Total training time: {} ({:.4f} s / it) throughput: {:.2f} FPS".format(
+            total_time_str, sec_per_iteration, samples_per_sec
         )
     )
