@@ -15,7 +15,7 @@ from .collate_batch import BatchCollator
 from .transforms import build_transforms
 
 
-def build_dataset(dataset_list, transforms, dataset_catalog, is_train=True):
+def build_dataset(dataset_list, transforms, dataset_catalog, data_dir, is_train=True):
     """
     Arguments:
         dataset_list (list[str]): Contains the names of the datasets, i.e.,
@@ -32,7 +32,7 @@ def build_dataset(dataset_list, transforms, dataset_catalog, is_train=True):
     datasets = []
     total_datasets_size = 0
     for dataset_name in dataset_list:
-        data = dataset_catalog.get(dataset_name)
+        data = dataset_catalog.get(dataset_name, data_dir)
         factory = getattr(D, data["factory"])
         args = data["args"]
         # for COCODataset, we want to remove images without annotations
@@ -107,7 +107,7 @@ def make_batch_data_sampler(
     return batch_sampler
 
 
-def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
+def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0, data_dir=None):
     num_gpus = get_world_size()
     if is_train:
         images_per_batch = cfg.SOLVER.IMS_PER_BATCH
@@ -155,7 +155,7 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
     dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
 
     transforms = build_transforms(cfg, is_train)
-    datasets, epoch_size = build_dataset(dataset_list, transforms, DatasetCatalog, is_train)
+    datasets, epoch_size = build_dataset(dataset_list, transforms, DatasetCatalog, data_dir, is_train)
     print("total_dataset_size: ", epoch_size)
 
     data_loaders = []

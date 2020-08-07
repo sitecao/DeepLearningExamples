@@ -92,7 +92,7 @@ def mlperf_test_early_exit(iteration, iters_per_epoch, tester, model, distribute
     return False
 
 
-def train(cfg, local_rank, distributed, bucket_cap_mb):
+def train(cfg, args):
     model = build_detection_model(cfg)
     device = torch.device(cfg.MODEL.DEVICE)
     model.to(device)
@@ -107,11 +107,11 @@ def train(cfg, local_rank, distributed, bucket_cap_mb):
         amp_opt_level = 'O1' if use_mixed_precision else 'O0'
         model, optimizer = amp.initialize(model, optimizer, opt_level=amp_opt_level)
 
-    if distributed:
+    if args.distributed:
         # if use_apex_ddp:
         #     model = DDP(model, delay_allreduce=True)
         # else:
-        model = DDP(model, device_ids=[herring.get_local_rank()], bucket_cap_mb=bucket_cap_mb)
+        model = DDP(model, device_ids=[herring.get_local_rank()], bucket_cap_mb=args.bucket_cap_mb)
         #model = DDP(model)
     print("model parameter size: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
     arguments = {}
@@ -129,8 +129,9 @@ def train(cfg, local_rank, distributed, bucket_cap_mb):
     data_loader, iters_per_epoch = make_data_loader(
         cfg,
         is_train=True,
-        is_distributed=distributed,
+        is_distributed=args.distributed,
         start_iter=arguments["iteration"],
+        data_dir = args.data_dir
     )
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
 
@@ -142,7 +143,7 @@ def train(cfg, local_rank, distributed, bucket_cap_mb):
                 iters_per_epoch=iters_per_epoch,
                 tester=functools.partial(test, cfg=cfg),
                 model=model,
-                distributed=distributed,
+                distributed=args.distributed,
                 min_bbox_map=cfg.MIN_BBOX_MAP,
                 min_segm_map=cfg.MIN_MASK_MAP)
     else:
@@ -164,8 +165,8 @@ def train(cfg, local_rank, distributed, bucket_cap_mb):
     return model
 
 
-def test_model(cfg, model, distributed):
-    if distributed:
+def test_model(cfg, model, args):
+    if args.distributed:
         model = model.module
     torch.cuda.empty_cache()  # TODO check if it helps
     iou_types = ("bbox",)
@@ -178,7 +179,8 @@ def test_model(cfg, model, distributed):
             output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
             mkdir(output_folder)
             output_folders[idx] = output_folder
-    data_loaders_val = make_data_loader(cfg, is_train=False, is_distributed=distributed)
+    data_loaders_val = make_data_loader(cfg, is_train=False, is_distributed=args.distributed,
+                                        data_dir = args.data_dir)
     for output_folder, dataset_name, data_loader_val in zip(output_folders, dataset_names, data_loaders_val):
         inference(
             model,
@@ -223,6 +225,13 @@ def main():
             default=25,
             type=int,
     )
+    parser.add_argument(
+        "--data-dir",
+        dest="data_dir",
+        help="Absolute path of dataset ",
+        type=str,
+        default=None
+    )
 
     args = parser.parse_args()
 
@@ -258,11 +267,11 @@ def main():
         logger.info(config_str)
     logger.info("Running with config:\n{}".format(cfg))
 
-    model = train(cfg, args.local_rank, args.distributed, args.bucket_cap_mb)
+    model = train(cfg, args)
 
     if not args.skip_test:
         if not cfg.PER_EPOCH_EVAL:
-            test_model(cfg, model, args.distributed)
+            test_model(cfg, model, args)
 
 
 if __name__ == "__main__":
