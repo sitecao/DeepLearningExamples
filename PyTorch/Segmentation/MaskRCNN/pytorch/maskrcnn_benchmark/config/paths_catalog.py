@@ -91,7 +91,10 @@ class DatasetCatalog(object):
     }
 
     @staticmethod
-    def get(name):
+    def get(name, data_path=None):
+        if data_path:
+            DatasetCatalog.DATA_DIR = data_path
+
         if "coco" in name:
             data_dir = DatasetCatalog.DATA_DIR
             attrs = DatasetCatalog.DATASETS[name]
