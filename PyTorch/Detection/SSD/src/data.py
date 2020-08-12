@@ -23,6 +23,8 @@ from src.coco import COCO
 #DALI import
 from src.coco_pipeline import COCOPipeline, DALICOCOIterator
 
+import herring.torch as herring
+
 def get_train_loader(args, local_seed):
     train_annotate = os.path.join(args.data, "annotations/instances_train2017.json")
     train_coco_root = os.path.join(args.data, "train2017")
@@ -50,7 +52,10 @@ def get_val_dataset(args):
 
 def get_val_dataloader(dataset, args):
     if args.distributed:
-        val_sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+        val_sampler = torch.utils.data.distributed.DistributedSampler(
+                            dataset,
+                            num_replicas=herring.get_world_size(),
+                            rank=herring.get_rank())
     else:
         val_sampler = None
 

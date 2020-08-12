@@ -1,7 +1,9 @@
 import torch
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
-import torch.distributed as dist
+# import torch.distributed as dist
 from torch.nn.modules import Module
+
+import herring.torch as herring
 
 '''
 This version of DistributedDataParallel is designed to be used in conjunction with the multiproc.py
@@ -16,16 +18,18 @@ class DistributedDataParallel(Module):
 
     def __init__(self, module):
         super(DistributedDataParallel, self).__init__()
-        self.warn_on_half = True if dist._backend == dist.dist_backend.GLOO else False
+        # self.warn_on_half = True if dist._backend == dist.dist_backend.GLOO else False
+        self.warn_on_half = False
 
         self.module = module
 
         for p in self.module.state_dict().values():
             if not torch.is_tensor(p):
                 continue
-            if dist._backend == dist.dist_backend.NCCL:
-                assert p.is_cuda, "NCCL backend only supports model parameters to be on GPU."
-            dist.broadcast(p, 0)
+            # if dist._backend == dist.dist_backend.NCCL:
+            #     assert p.is_cuda, "NCCL backend only supports model parameters to be on GPU."
+            # dist.broadcast(p, 0)
+            herring.broadcast(p, 0)
 
         def allreduce_params():
             if(self.needs_reduction):
@@ -47,8 +51,10 @@ class DistributedDataParallel(Module):
                     bucket = buckets[tp]
                     grads = [param.grad.data for param in bucket]
                     coalesced = _flatten_dense_tensors(grads)
-                    dist.all_reduce(coalesced)
-                    coalesced /= dist.get_world_size()
+                    # dist.all_reduce(coalesced)
+                    herring.all_reduce(coalesced)
+                    # coalesced /= dist.get_world_size()
+                    coalesced /= herring.get_world_size()
                     for buf, synced in zip(grads, _unflatten_dense_tensors(coalesced, grads)):
                         buf.copy_(synced)
 

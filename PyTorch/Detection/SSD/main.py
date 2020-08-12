@@ -29,12 +29,14 @@ from src.data import get_train_loader, get_val_dataset, get_val_dataloader, get_
 
 import dllogger as DLLogger
 
+import herring.torch as herring
 
 # Apex imports
 try:
     from apex.parallel.LARC import LARC
     from apex import amp
-    from apex.parallel import DistributedDataParallel as DDP
+    # from apex.parallel import DistributedDataParallel as DDP
+    from herring.torch.parallel import DistributedDataParallel as DDP
     from apex.fp16_utils import *
 except ImportError:
     raise ImportError("Please install APEX from https://github.com/nvidia/apex")
@@ -113,7 +115,7 @@ def make_parser():
                              'the specified file.')
 
     # Distributed
-    parser.add_argument('--local_rank', default=os.getenv('LOCAL_RANK',0), type=int,
+    parser.add_argument('--local_rank', default=herring.get_local_rank(), type=int,
                         help='Used for multi-process training. Can either be manually set ' +
                              'or automatically set by using \'python -m multiproc\'.')
 
@@ -126,13 +128,17 @@ def train(train_loop_func, logger, args):
 
     # Setup multi-GPU if necessary
     args.distributed = False
-    if 'WORLD_SIZE' in os.environ:
-        args.distributed = int(os.environ['WORLD_SIZE']) > 1
+    # if 'WORLD_SIZE' in os.environ:
+    #     args.distributed = int(os.environ['WORLD_SIZE']) > 1
+
+    num_gpus = herring.get_world_size()
+    args.distributed = num_gpus > 1
 
     if args.distributed:
         torch.cuda.set_device(args.local_rank)
-        torch.distributed.init_process_group(backend='nccl', init_method='env://')
-        args.N_gpu = torch.distributed.get_world_size()
+        # torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        # args.N_gpu = torch.distributed.get_world_size()
+        args.N_gpu = herring.get_world_size()
     else:
         args.N_gpu = 1
 
@@ -140,7 +146,8 @@ def train(train_loop_func, logger, args):
         args.seed = np.random.randint(1e4)
 
     if args.distributed:
-        args.seed = (args.seed + torch.distributed.get_rank()) % 2**32
+        # args.seed = (args.seed + torch.distributed.get_rank()) % 2**32
+        args.seed = (args.seed + herring.get_rank()) % 2 ** 32
     print("Using seed = {}".format(args.seed))
     torch.manual_seed(args.seed)
     np.random.seed(seed=args.seed)
@@ -173,7 +180,7 @@ def train(train_loop_func, logger, args):
         ssd300, optimizer = amp.initialize(ssd300, optimizer, opt_level='O2')
 
     if args.distributed:
-        ssd300 = DDP(ssd300)
+        ssd300 = DDP(ssd300, device_ids=[herring.get_local_rank()])
 
     if args.checkpoint is not None:
         if os.path.isfile(args.checkpoint):
