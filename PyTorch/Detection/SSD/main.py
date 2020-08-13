@@ -181,7 +181,7 @@ def train(train_loop_func, logger, args):
         ssd300, optimizer = amp.initialize(ssd300, optimizer, opt_level='O1')
 
     if args.distributed:
-        ssd300 = DDP(ssd300, device_ids=[herring.get_local_rank()])
+        ssd300 = DDP(ssd300)
 
     if args.checkpoint is not None:
         if os.path.isfile(args.checkpoint):
