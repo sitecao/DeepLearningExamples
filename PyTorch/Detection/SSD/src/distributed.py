@@ -80,4 +80,3 @@ class DistributedDataParallel(Module):
         super(DistributedDataParallel, self).train(mode)
         self.module.train(mode)
     '''
-
