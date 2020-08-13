@@ -20,12 +20,10 @@ import io
 
 from pycocotools.cocoeval import COCOeval
 
-import herring.torch as herring
 
 def evaluate(model, coco, cocoGt, encoder, inv_map, args):
     if args.distributed:
-        # N_gpu = torch.distributed.get_world_size()
-        N_gpu = herring.get_world_size()
+        N_gpu = torch.distributed.get_world_size()
     else:
         N_gpu = 1
 
@@ -84,9 +82,7 @@ def evaluate(model, coco, cocoGt, encoder, inv_map, args):
         ret_sizes = [torch.tensor(0).cuda() for _ in range(N_gpu)]
 
         torch.cuda.synchronize()
-        # TODO: find all_gather API
-        # torch.distributed.all_gather(ret_sizes, torch.tensor(ret_copy.shape[0]).cuda())
-        herring.all_gather(ret_sizes, torch.tensor(ret_copy.shape[0]).cuda())
+        torch.distributed.all_gather(ret_sizes, torch.tensor(ret_copy.shape[0]).cuda())
         torch.cuda.synchronize()
 
         # Get the maximum results size, as all tensors must be the same shape for
@@ -105,9 +101,7 @@ def evaluate(model, coco, cocoGt, encoder, inv_map, args):
         # Everyone exchanges (padded) results
 
         torch.cuda.synchronize()
-        # TODO: find all_gather API
-        # torch.distributed.all_gather(other_ret, ret_pad)
-        herring.all_gather(other_ret, ret_pad)
+        torch.distributed.all_gather(other_ret, ret_pad)
         torch.cuda.synchronize()
 
         # Now need to reconstruct the _actual_ results from the padded set using slices.
