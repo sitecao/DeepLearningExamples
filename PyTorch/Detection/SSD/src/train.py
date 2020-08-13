@@ -61,7 +61,7 @@ def train_loop(model, loss_func, epoch, optim, train_dataloader, val_dataloader,
 
         loss = loss_func(ploc, plabel, gloc, glabel)
 
-        if args.local_rank == 0:
+        if herring.get_rank() == 0:
             logger.update_iter(epoch, iteration, loss.item())
 
         if args.amp:

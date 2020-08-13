@@ -125,6 +125,7 @@ def make_parser():
 def train(train_loop_func, logger, args):
     # Check that GPUs are actually available
     use_cuda = not args.no_cuda
+    train_samples = 118287
 
     # Setup multi-GPU if necessary
     args.distributed = False
@@ -177,7 +178,7 @@ def train(train_loop_func, logger, args):
                                     momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = MultiStepLR(optimizer=optimizer, milestones=args.multistep, gamma=0.1)
     if args.amp:
-        ssd300, optimizer = amp.initialize(ssd300, optimizer, opt_level='O2')
+        ssd300, optimizer = amp.initialize(ssd300, optimizer, opt_level='O1')
 
     if args.distributed:
         ssd300 = DDP(ssd300, device_ids=[herring.get_local_rank()])
@@ -215,8 +216,10 @@ def train(train_loop_func, logger, args):
         end_epoch_time = time.time() - start_epoch_time
         total_time += end_epoch_time
 
-        if args.local_rank == 0:
+        if herring.get_rank() == 0:
+            throughput = train_samples / end_epoch_time
             logger.update_epoch_time(epoch, end_epoch_time)
+            logger.update_throughput_speed(epoch, throughput)
 
         if epoch in args.evaluation:
             acc = evaluate(ssd300, val_dataloader, cocoGt, encoder, inv_map, args)
@@ -239,8 +242,9 @@ def train(train_loop_func, logger, args):
             torch.save(obj, save_path)
             logger.log('model path', save_path)
         train_loader.reset()
-    DLLogger.log((), { 'total time': total_time })
-    logger.log_summary()
+    if herring.get_rank() == 0:
+        DLLogger.log((), { 'Total training time': '%.2f' % total_time + ' secs' })
+        logger.log_summary()
 
 
 def log_params(logger, args):
