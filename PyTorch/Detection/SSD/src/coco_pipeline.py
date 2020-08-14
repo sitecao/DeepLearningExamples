@@ -28,7 +28,6 @@ import nvidia.dali.types as types
 
 import time
 
-import herring.torch as herring
 
 class COCOPipeline(Pipeline):
     def __init__(self, batch_size, device_id, file_root, annotations_file, num_gpus,
@@ -36,12 +35,11 @@ class COCOPipeline(Pipeline):
         super(COCOPipeline, self).__init__(batch_size=batch_size, device_id=device_id,
                                            num_threads=num_threads, seed = seed)
 
-        # if torch.distributed.is_initialized():
-        #     shard_id = torch.distributed.get_rank()
-        # else:
-        #     shard_id = 0
+        if torch.distributed.is_initialized():
+            shard_id = torch.distributed.get_rank()
+        else:
+            shard_id = 0
 
-        shard_id = herring.get_rank()
         self.input = ops.COCOReader(file_root = file_root, annotations_file = annotations_file,
                             shard_id = shard_id, num_shards = num_gpus, ratio=True, ltrb=True, random_shuffle=True,
                                     skip_empty=True)

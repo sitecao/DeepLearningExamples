@@ -19,8 +19,6 @@ from SSD import _C as C
 
 from apex import amp
 
-import herring.torch as herring
-
 def train_loop(model, loss_func, epoch, optim, train_dataloader, val_dataloader, encoder, iteration, logger, args, mean, std):
 #     for nbatch, (img, _, img_size, bbox, label) in enumerate(train_dataloader):
     for nbatch, data in enumerate(train_dataloader):
@@ -61,7 +59,7 @@ def train_loop(model, loss_func, epoch, optim, train_dataloader, val_dataloader,
 
         loss = loss_func(ploc, plabel, gloc, glabel)
 
-        if herring.get_rank() == 0:
+        if args.local_rank == 0:
             logger.update_iter(epoch, iteration, loss.item())
 
         if args.amp:
@@ -153,8 +151,7 @@ def benchmark_train_loop(model, loss_func, epoch, optim, train_dataloader, val_d
 
     result.data[0] = logger.print_result()
     if args.N_gpu > 1:
-        # torch.distributed.reduce(result, 0)
-        herring.all_reduce(result)
+        torch.distributed.reduce(result, 0)
     if args.local_rank == 0:
         print('Training performance = {} FPS'.format(float(result.data[0])))
 
