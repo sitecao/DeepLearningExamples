@@ -421,7 +421,7 @@ def prepare_model_and_optimizer(args, device):
     if args.local_rank != -1:
         if not args.allreduce_post_accumulation:
             # model = DDP(model, message_size=250000000, gradient_predivide_factor=get_world_size())
-            model = DDP(model, gradient_accumulation_steps=10)
+            model = DDP(model, gradient_accumulation_steps=args.gradient_accumulation_steps)
         else:
             flat_dist_call([param.data for param in model.parameters()], herring.broadcast, (0,) )
     elif args.n_gpu > 1:
