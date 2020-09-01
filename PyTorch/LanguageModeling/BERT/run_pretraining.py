@@ -483,7 +483,6 @@ def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
         for param in model.parameters():
             param.grad = None
     else:
-        print("Acumulation finished before step:", model.accumulation_finished())
         optimizer.step()
         #optimizer.zero_grad()
         for param in model.parameters():
