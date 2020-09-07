@@ -32,12 +32,12 @@ from absl import app
 import tensorflow as tf
 from tensorflow.python.framework.ops import disable_eager_execution
 
-from mask_rcnn.utils.logging_formatter import logging
-from mask_rcnn.utils.distributed_utils import MPI_is_distributed
-
 from mask_rcnn import dataloader
 from mask_rcnn import distributed_executer
 from mask_rcnn import mask_rcnn_model
+
+from mask_rcnn.utils.logging_formatter import logging
+from mask_rcnn.utils.distributed_utils import MPI_is_distributed
 
 from mask_rcnn.hyperparameters import mask_rcnn_params
 from mask_rcnn.hyperparameters import params_io
