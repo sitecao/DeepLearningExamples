@@ -111,6 +111,7 @@ def main(argv):
     dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
                                                            filename=RUN_CONFIG.log_path)])
 
+
     if RUN_CONFIG.mode in ('train', 'train_and_eval'):
 
         train_input_fn = dataloader.InputReader(
