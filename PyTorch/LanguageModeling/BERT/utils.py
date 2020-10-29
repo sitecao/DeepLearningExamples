@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import torch
-import herring.torch as herring
+import herring.torch.distributed as herring
 
 def get_rank():
     # if not dist.is_available():

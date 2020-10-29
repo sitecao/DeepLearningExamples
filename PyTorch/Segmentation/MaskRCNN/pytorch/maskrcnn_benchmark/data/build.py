@@ -6,7 +6,7 @@ import logging
 import torch.utils.data
 #from maskrcnn_benchmark.utils.comm import get_world_size
 from maskrcnn_benchmark.utils.imports import import_file
-from herring.torch import get_world_size
+from herring.torch.distributed import get_world_size
 
 from . import datasets as D
 from . import samplers

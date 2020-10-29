@@ -23,7 +23,9 @@ from src.coco import COCO
 #DALI import
 from src.coco_pipeline import COCOPipeline, DALICOCOIterator
 
-import herring.torch as herring
+import herring.torch.distributed as herring
+if not herring.is_initialized():
+    herring.init_process_group()
 
 def get_train_loader(args, local_seed):
     train_annotate = os.path.join(args.data, "annotations/instances_train2017.json")

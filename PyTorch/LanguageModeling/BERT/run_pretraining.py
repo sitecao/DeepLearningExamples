@@ -45,7 +45,10 @@ from schedulers import PolyWarmUpScheduler
 from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from utils import is_main_process, format_step, get_world_size, get_rank
 #from apex.parallel import DistributedDataParallel as DDP
-import herring.torch as herring
+import herring.torch.distributed as herring
+if not herring.is_initialized():
+    herring.init_process_group()
+
 from herring.torch.parallel import DistributedDataParallel as DDP
 from schedulers import LinearWarmUpScheduler
 from apex.parallel.distributed import flat_dist_call
@@ -410,7 +413,7 @@ def prepare_model_and_optimizer(args, device):
                 checkpoint['optimizer']['param_groups'][iter]['lr'] = args.learning_rate
         optimizer.load_state_dict(checkpoint['optimizer'])  # , strict=False)
 
-        # Restore AMP master parameters          
+        # Restore AMP master parameters
         if args.fp16:
             optimizer._lazy_init_maybe_master_weights()
             optimizer._amp_stash.lazy_init_called = True
@@ -659,7 +662,7 @@ def main():
                                     ckpt_to_be_removed = most_recent_ckpts_paths.pop(0)
                                     os.remove(ckpt_to_be_removed)
 
-                        # Exiting the training due to hitting max steps, or being sent a 
+                        # Exiting the training due to hitting max steps, or being sent a
                         # timeout from the cluster scheduler
                         if global_step >= args.steps_this_run or timeout_sent:
                             del train_dataloader

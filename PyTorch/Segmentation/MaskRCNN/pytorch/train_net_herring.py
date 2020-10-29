@@ -15,6 +15,12 @@ import random
 import numpy as np
 
 import torch
+
+import herring.torch.distributed as herring
+if not herring.is_initialized():
+    herring.init_process_group()
+from herring.torch.parallel import DistributedDataParallel as DDP
+
 from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.data import make_data_loader
 from maskrcnn_benchmark.solver import make_lr_scheduler
@@ -29,10 +35,6 @@ from maskrcnn_benchmark.utils.imports import import_file
 from maskrcnn_benchmark.utils.logger import setup_logger
 from maskrcnn_benchmark.utils.miscellaneous import mkdir
 from maskrcnn_benchmark.engine.tester import test
-
-from herring.torch.parallel import DistributedDataParallel as DDP
-import herring.torch as herring
-
 
 
 # See if we can use apex.DistributedDataParallel instead of the torch default,

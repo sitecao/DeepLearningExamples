@@ -6,11 +6,13 @@ import time
 
 import torch
 import torch.distributed as dist
-import herring.torch as herring
+import herring.torch.distributed as herring
+if not herring.is_initialized():
+    herring.init_process_group()
 #from maskrcnn_benchmark.utils.comm import get_world_size
 from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 
-from herring.torch import get_world_size
+from herring.torch.distributed import get_world_size
 
 try:
     from apex import amp

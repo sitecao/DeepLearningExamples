@@ -18,18 +18,20 @@ from argparse import ArgumentParser
 import torch
 import numpy as np
 from torch.optim.lr_scheduler import MultiStepLR
-import torch.utils.data.distributed
 
+import herring.torch.distributed as herring
+if not herring.is_initialized():
+    herring.init_process_group()
+
+import torch.utils.data.distributed
 from src.model import SSD300, ResNet, Loss
 from src.utils import dboxes300_coco, Encoder
 from src.logger import Logger, BenchLogger
-from src.evaluate import evaluate
-from src.train import train_loop, tencent_trick, load_checkpoint, benchmark_train_loop, benchmark_inference_loop
+from src.evaluate import evaluatefrom src.train import train_loop, tencent_trick, load_checkpoint, benchmark_train_loop, benchmark_inference_loop
 from src.data import get_train_loader, get_val_dataset, get_val_dataloader, get_coco_ground_truth
 
 import dllogger as DLLogger
 
-import herring.torch as herring
 
 # Apex imports
 try:

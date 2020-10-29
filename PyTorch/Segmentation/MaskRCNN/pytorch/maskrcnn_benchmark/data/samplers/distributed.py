@@ -5,7 +5,9 @@ import math
 import torch
 import torch.distributed as dist
 from torch.utils.data.sampler import Sampler
-import herring.torch as herring
+import herring.torch.distributed as herring
+if not herring.is_initialized():
+    herring.init_process_group()
 
 class DistributedSampler(Sampler):
     """Sampler that restricts data loading to a subset of the dataset.
