@@ -18,7 +18,10 @@ import os
 import shutil
 import subprocess
 from argparse import ArgumentError
-
+'''
+The mask_rcnn_main.py expects args with a `=` sign in between them. eg : python mask_rcnn_main.py --train_steps=100. 
+This files takes parameters from SageMaker job and massages them with `=`.
+'''
 
 def csv_int(vstr, sep=','):
     values = []
