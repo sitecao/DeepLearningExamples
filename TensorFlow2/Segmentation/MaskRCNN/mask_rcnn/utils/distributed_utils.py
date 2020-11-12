@@ -17,7 +17,7 @@
 
 import os
 import sys
-import smdistributed.dataparallel.tensorflow as hr
+import herring.tensorflow as hr
 
 __all__ = ["MPI_local_rank", "MPI_rank", "MPI_size", "MPI_rank_and_size", "MPI_is_distributed"]
 

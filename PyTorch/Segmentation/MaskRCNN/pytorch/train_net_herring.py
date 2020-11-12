@@ -16,7 +16,7 @@ import numpy as np
 
 import torch
 
-import smdistributed.dataparallel.torch.distributed as herring
+import herring.torch.distributed as herring
 if not herring.is_initialized():
     herring.init_process_group()
 from herring.torch.parallel import DistributedDataParallel as DDP

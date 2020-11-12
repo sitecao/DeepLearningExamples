@@ -5,7 +5,7 @@ import math
 import torch
 import torch.distributed as dist
 from torch.utils.data.sampler import Sampler
-import smdistributed.dataparallel.torch.distributed as herring
+import herring.torch.distributed as herring
 if not herring.is_initialized():
     herring.init_process_group()
 

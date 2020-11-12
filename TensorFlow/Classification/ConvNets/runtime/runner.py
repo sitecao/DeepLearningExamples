@@ -21,7 +21,7 @@ import warnings
 import tensorflow as tf
 import numpy as np
 
-import smdistributed.dataparallel.tensorflow as hvd
+import herring.tensorflow as hvd
 
 from model import resnet
 

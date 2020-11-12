@@ -26,7 +26,7 @@ import re
 import numpy as np
 import six
 import tensorflow as tf
-import smdistributed.dataparallel.tensorflow as herring
+import herring.tensorflow as herring
 
 from gpu_environment import get_custom_getter
 

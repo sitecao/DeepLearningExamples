@@ -19,7 +19,7 @@ import torch
 import numpy as np
 from torch.optim.lr_scheduler import MultiStepLR
 
-import smdistributed.dataparallel.torch.distributed as herring
+import herring.torch.distributed as herring
 if not herring.is_initialized():
     herring.init_process_group()
 
