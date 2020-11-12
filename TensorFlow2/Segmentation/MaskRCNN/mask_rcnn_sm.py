@@ -32,7 +32,6 @@ def csv_int(vstr, sep=','):
 
 def main():
     # CLI flags
-    print ("Here")
     parser = argparse.ArgumentParser(description="MaskRCNN train benchmark")
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--checkpoint', type=str, required=True)
