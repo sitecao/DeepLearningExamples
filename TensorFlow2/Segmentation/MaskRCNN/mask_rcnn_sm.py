@@ -49,6 +49,7 @@ def main():
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--use_batched_nms', action='store_true')
     parser.add_argument('--xla', action='store_true')
+    parser.add_argument('--eval_after_training', action='store_true')
     parser.add_argument('--nouse_custom_box_proposals_op', action='store_true')
     parser.add_argument('--seed', type=int, default=987)
 
@@ -78,6 +79,7 @@ def main():
         f' {"--amp" if flags.amp else ""}'
         f' {"--use_batched_nms" if flags.use_batched_nms else ""}'
         f' {"--xla" if flags.xla else ""}'
+        f' {"--eval_after_training" if flags.eval_after_training else ""}'
         f' {"--nouse_custom_box_proposals_op" if flags.nouse_custom_box_proposals_op else ""}'
         f' --seed={flags.seed}'
     )
