@@ -182,7 +182,7 @@ def train(train_loop_func, logger, args):
                                     momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = MultiStepLR(optimizer=optimizer, milestones=args.multistep, gamma=0.1)
     if args.amp:
-        ssd300, optimizer = amp.initialize(ssd300, optimizer, opt_level='O1')
+        ssd300, optimizer = amp.initialize(ssd300, optimizer, opt_level='O2')
 
     if args.distributed:
         ssd300 = DDP(ssd300, broadcast_buffers=False)
