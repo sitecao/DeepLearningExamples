@@ -283,6 +283,8 @@ def parse_arguments():
                         help='Disable tqdm progress bar')
     parser.add_argument('--steps_this_run', type=int, default=-1,
                         help='If provided, only run this many steps before exiting')
+    parser.add_argument('--bucket_cap_mb', type=int, default=25,
+                        help='If provided, only run this many steps before exiting')
 
     args = parser.parse_args()
     args.fp16 = args.fp16 or args.amp
@@ -424,7 +426,7 @@ def prepare_model_and_optimizer(args, device):
     if args.local_rank != -1:
         if not args.allreduce_post_accumulation:
             # model = DDP(model, message_size=250000000, gradient_predivide_factor=get_world_size())
-            model = DDP(model)
+            model = DDP(model, bucket_cap_mb=args.bucket_cap_mb)
         else:
             flat_dist_call([param.data for param in model.parameters()], herring.broadcast, (0,) )
     elif args.n_gpu > 1:
