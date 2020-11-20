@@ -46,6 +46,7 @@ from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from utils import is_main_process, format_step, get_world_size, get_rank
 #from apex.parallel import DistributedDataParallel as DDP
 import smdistributed.dataparallel.torch.distributed as herring
+import smdistributed.dataparallel as hdebug
 if not herring.is_initialized():
     herring.init_process_group()
 
@@ -244,7 +245,7 @@ def parse_arguments():
                         default=100,
                         help="Number of update steps until a model checkpoint is saved to disk.")
     parser.add_argument('--skip_checkpoint',
-                        default=False,
+                        default=True,
                         action='store_true',
                         help="Whether to save checkpoints")
     parser.add_argument('--phase2',
@@ -488,6 +489,12 @@ def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
         for param in model.parameters():
             param.grad = None
     else:
+        if herring.get_rank() == 0:
+            path = "/shared/tl" if os.path.isdir("/shared/") else "/opt/ml/output/prof"
+            if global_step == 30: hdebug.start_profiler("", )
+            if global_step == 33: hdebug.stop_profiler()
+
+
         optimizer.step()
         #optimizer.zero_grad()
         for param in model.parameters():
