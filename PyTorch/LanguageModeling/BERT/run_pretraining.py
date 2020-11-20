@@ -283,7 +283,7 @@ def parse_arguments():
                         help='Disable tqdm progress bar')
     parser.add_argument('--steps_this_run', type=int, default=-1,
                         help='If provided, only run this many steps before exiting')
-    parser.add_argument('--bucket_cap_mb', type=int, default=-25,
+    parser.add_argument('--bucket_cap_mb', type=int, default=25,
                         help='If provided, only run this many steps before exiting')
 
     args = parser.parse_args()
