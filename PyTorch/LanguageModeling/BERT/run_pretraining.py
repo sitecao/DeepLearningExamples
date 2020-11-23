@@ -490,8 +490,8 @@ def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
             param.grad = None
     else:
         if herring.get_rank() == 0:
-            path = "/shared/tl" if os.path.isdir("/shared/") else "/opt/ml/output/prof"
-            if global_step == 30: hdebug.start_profiler("", )
+            path = "/shared/tl" if os.path.isdir("/shared/") else "/opt/ml/model/prof"
+            if global_step == 30: hdebug.start_profiler(path, True)
             if global_step == 33: hdebug.stop_profiler()
 
 
