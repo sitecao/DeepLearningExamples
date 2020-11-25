@@ -437,8 +437,12 @@ def prepare_model_and_optimizer(args, device):
 
     return model, optimizer, lr_scheduler, checkpoint, global_step, criterion
 
-def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
 
+import time
+ts = time.time()
+
+def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
+    global ts
     global skipped_steps
     if args.allreduce_post_accumulation:
         # manually allreduce gradients after all accumulation steps
@@ -490,6 +494,9 @@ def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
             param.grad = None
     else:
         if herring.get_rank() == 0:
+            if global_step % 50 == 0:
+                print("Seconds passed: ", time.time()-ts)
+                ts = time.time()
             path = "/shared/tl" if os.path.isdir("/shared/") else "/opt/ml/model/prof"
             if global_step == 30: hdebug.start_profiler(path, True)
             if global_step == 33: hdebug.stop_profiler()
