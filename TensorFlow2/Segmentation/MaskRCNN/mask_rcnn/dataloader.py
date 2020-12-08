@@ -105,7 +105,7 @@ class InputReader(object):
                 _shard_idx = input_context.input_pipeline_id
 
             elif MPI_is_distributed():
-                logging.info("Using Dataset Sharding with Herring")
+                logging.info("Using Dataset Sharding with SageMaker Distributed Data Parallel")
                 _shard_idx, _num_shards = MPI_rank_and_size()
 
             try:
