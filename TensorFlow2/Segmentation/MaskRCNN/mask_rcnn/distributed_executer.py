@@ -481,7 +481,7 @@ class EstimatorExecuter(BaseExecuter):
       os.environ['HOROVOD_NUM_NCCL_STREAMS'] = '1'
       # os.environ['HOROVOD_AUTOTUNE'] = '2'
 
-      logging.info("Herring successfully initialized ...")
+      logging.info("SM DDP successfully initialized ...")
 
     os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
     os.environ['TF_GPU_THREAD_COUNT'] = '1' if not MPI_is_distributed() else str(hvd.size())
