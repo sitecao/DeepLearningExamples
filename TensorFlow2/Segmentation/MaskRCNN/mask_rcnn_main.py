@@ -95,7 +95,7 @@ def main(argv):
     # ============================ Configure parameters ============================ #
 
     if RUN_CONFIG.use_tf_distributed and MPI_is_distributed():
-        raise RuntimeError("Incompatible Runtime. Impossible to use `--use_tf_distributed` with herringrun")
+        raise RuntimeError("Incompatible Runtime. Impossible to use `--use_tf_distributed` with smddprun")
 
     if RUN_CONFIG.mode in ('train', 'train_and_eval') and not RUN_CONFIG.training_file_pattern:
         raise RuntimeError('You must specify `training_file_pattern` for training.')
