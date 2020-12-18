@@ -175,10 +175,9 @@ class BaseExecuter(object):
       )
 
       gpus = tf.config.experimental.list_physical_devices('GPU')
-      for gpu in gpus:
-          tf.config.experimental.set_memory_growth(gpu, True)
       if gpus:
           tf.config.experimental.set_visible_devices(gpus[hvd.local_rank()], 'GPU')
+          tf.config.experimental.set_memory_growth(gpus[hvd.local_rank()], True)
 
       if use_amp:
           logging.info("[%s] AMP is activated - Experiment Feature" % mode)
