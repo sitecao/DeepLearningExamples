@@ -174,6 +174,12 @@ class BaseExecuter(object):
           # shape_optimization=rewriter_config_pb2.RewriterConfig.ON,           # TO TEST
       )
 
+      gpus = tf.config.experimental.list_physical_devices('GPU')
+      for gpu in gpus:
+          tf.config.experimental.set_memory_growth(gpu, True)
+      if gpus:
+          tf.config.experimental.set_visible_devices(gpus[hvd.local_rank()], 'GPU')
+
       if use_amp:
           logging.info("[%s] AMP is activated - Experiment Feature" % mode)
           rewrite_options.auto_mixed_precision = True
