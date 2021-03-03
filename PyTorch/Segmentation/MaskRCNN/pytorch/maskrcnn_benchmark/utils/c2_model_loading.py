@@ -136,6 +136,7 @@ def _load_c2_pickled_weights(file_path):
         #    data = pickle.load(f, encoding="latin1")
         #else:
         #    data = pickle.load(f)
+	print("HERE")
 	data = pickle.load(f, encoding="latin1")
     if "blobs" in data:
         weights = data["blobs"]
