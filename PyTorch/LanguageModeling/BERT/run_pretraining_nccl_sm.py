@@ -72,19 +72,22 @@ if __name__ == "__main__":
     seed = args.seed
     fp_16 = '--fp16' if args.fp16 else ''
     do_train = '--do_train' if args.do_train else ''
+    # main_path = '/opt/ml/code/DeepLearningExamples/PyTorch/LanguageModeling/BERT/run_pretraining.py'
+    main_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'run_pretraining.py'))
+    print(main_path)
 
     num_gpus = int(os.environ["SM_NUM_GPUS"])
     hosts = json.loads(os.environ["SM_HOSTS"])
     current_host = os.environ["SM_CURRENT_HOST"]
     rank = hosts.index(current_host)
-    #     work_dir = os.environ['SM_OUTPUT_DATA_DIR']
+    # work_dir = os.environ['SM_OUTPUT_DATA_DIR']
     work_dir = '/opt/ml/code'
     data_dir = os.environ["SM_CHANNEL_TRAIN"]
     json_file = work_dir + "/dllogger.json"
 
     cmd = f"python -m torch.distributed.launch --nnodes={num_nodes} --node_rank={rank} --nproc_per_node={num_gpus} \
         --master_addr={hosts[0]} --master_port='12345' \
-    /opt/ml/code/DeepLearningExamples/PyTorch/LanguageModeling/BERT/run_pretraining.py --input_dir {data_dir} --output_dir {work_dir} --config_file /opt/ml/code/DeepLearningExamples/PyTorch/LanguageModeling/BERT/bert_config.json --bert_model bert-large-uncased --train_batch_size {train_batch_size} --max_seq_length {max_seq_length} --max_predictions_per_seq {max_predictions_per_seq} --max_steps {max_steps} --warmup_proportion {warmup_proportion} --log_freq {log_freq} --num_steps_per_checkpoint {args.num_steps_per_checkpoint} --learning_rate {learning_rate} --seed {seed} {fp_16} {do_train} --json-summary {json_file}"
+    /shared/DeepLearningExamples/PyTorch/LanguageModeling/BERT/run_pretraining.py --input_dir {data_dir} --output_dir {work_dir} --config_file /opt/ml/code/DeepLearningExamples/PyTorch/LanguageModeling/BERT/bert_config.json --bert_model bert-large-uncased --train_batch_size {train_batch_size} --max_seq_length {max_seq_length} --max_predictions_per_seq {max_predictions_per_seq} --max_steps {max_steps} --warmup_proportion {warmup_proportion} --log_freq {log_freq} --num_steps_per_checkpoint {args.num_steps_per_checkpoint} --learning_rate {learning_rate} --seed {seed} {fp_16} {do_train} --json-summary {json_file}"
 
     print (cmd)
     invoke_train(cmd)
