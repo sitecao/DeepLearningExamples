@@ -55,6 +55,7 @@ def main():
     parser.add_argument('--eval_after_training', action='store_true')
     parser.add_argument('--nouse_custom_box_proposals_op', action='store_true')
     parser.add_argument('--seed', type=int, default=987)
+    parser.add_argument('--bucket_cap_mb', type=int, default=64)
 
     flags, unknown = parser.parse_known_args()
     main_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'mask_rcnn_main.py'))
@@ -85,6 +86,7 @@ def main():
         f' {"--eval_after_training" if flags.eval_after_training else ""}'
         f' {"--nouse_custom_box_proposals_op" if flags.nouse_custom_box_proposals_op else ""}'
         f' --seed={flags.seed}'
+        f' --bucket_cap_mb={flags.bucket_cap_mb}'
     )
 
     # print command
