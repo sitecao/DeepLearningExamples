@@ -65,7 +65,7 @@ def create_optimizer(learning_rate, params):
             name=None,
             device_dense='/gpu:0',
             device_sparse='',
-            bucket_cap_mb=64,
+            bucket_cap_mb=params['bucket_cap_mb'],
             # compression=hvd.Compression.fp16,
             # compression=hvd.Compression.none,
             # sparse_as_dense=False
