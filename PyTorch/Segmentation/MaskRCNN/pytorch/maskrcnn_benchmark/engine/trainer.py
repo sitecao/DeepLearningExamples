@@ -6,13 +6,12 @@ import time
 
 import torch
 import torch.distributed as dist
-import smdistributed.dataparallel.torch.distributed as herring
-if not herring.is_initialized():
-    herring.init_process_group()
-#from maskrcnn_benchmark.utils.comm import get_world_size
+import smdistributed.dataparallel.torch.distributed as dist
+if not dist.is_initialized():
+    dist.init_process_group()
+from maskrcnn_benchmark.utils.comm import get_world_size, is_main_process
 from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 
-from smdistributed.dataparallel.torch.distributed import get_world_size
 
 try:
     from apex import amp
@@ -58,13 +57,13 @@ def do_train(
     arguments,
     use_amp,
     cfg,
+    dllogger=None,
     per_iter_end_callback_fn=None,
 ):
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
     logger.info("Start training")
     meters = MetricLogger(delimiter="  ")
     max_iter = len(data_loader)
-    print("max_iter: ", max_iter)
     start_iter = arguments["iteration"]
     model.train()
     start_training_time = time.time()
@@ -108,7 +107,7 @@ def do_train(
         batch_time = time.time() - end
         end = time.time()
 
-        if iteration % 20 == 0:
+        if iteration % 5 == 0 and is_main_process():
             logger.info("iter: %d batch_time: %f" % (iteration, batch_time))
 
         if(iteration > 500):
@@ -117,13 +116,14 @@ def do_train(
             eta_seconds = meters.time.global_avg * (max_iter - iteration)
             eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
 
-            if iteration % 20 == 0 or iteration == max_iter:
+            if (iteration % 5 == 0 or iteration == max_iter) and is_main_process():
                 logger.info(
                     meters.delimiter.join(
                         [
                             "eta: {eta}",
                             "avg iteration time(s): {avg_iter:.2f}",
                             "avg iter/s: {iter_s:.2f}",
+                            "throughput: {speed:.2f} FPS",
                             "iter: {iter}",
                             "{meters}",
                             "lr: {lr:.6f}",
@@ -132,7 +132,8 @@ def do_train(
                     ).format(
                         eta=eta_string,
                         avg_iter=meters.time.global_avg,
-                        iter_s = 1.0/meters.time.global_avg,
+                        iter_s=1.0/meters.time.global_avg,
+                        speed=1.0/meters.time.global_avg*int(cfg.SOLVER.IMS_PER_BATCH),
                         iter=iteration,
                         meters=str(meters),
                         lr=optimizer.param_groups[0]["lr"],
@@ -151,14 +152,8 @@ def do_train(
             if early_exit:
                 break
 
-
-    total_training_time = time.time() - start_training_time
-    total_time_str = str(datetime.timedelta(seconds=total_training_time))
-    sec_per_iteration = total_training_time / max_iter
-    samples_per_sec = int(cfg.SOLVER.IMS_PER_BATCH) / sec_per_iteration
-    logger.info(
-        "Total training time: {} ({:.4f} s / it) throughput: {:.2f} FPS".format(
-            total_time_str, sec_per_iteration, samples_per_sec
-        )
-    )
-    logger.info("Final Loss at iteration {}: {}".format(max_iter, str(meters)))
+    if is_main_process():
+        total_training_time = time.time() - start_training_time
+        total_time_str = str(datetime.timedelta(seconds=total_training_time))
+        logger.info("Total training time: {} ".format(total_time_str))
+        logger.info("Final Loss at iteration {}: {}".format(max_iter, str(meters)))
