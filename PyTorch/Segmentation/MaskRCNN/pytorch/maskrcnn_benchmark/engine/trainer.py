@@ -7,8 +7,9 @@ import time
 import torch
 import torch.distributed as dist
 import smdistributed.dataparallel.torch.distributed as dist
+from datetime import timedelta
 if not dist.is_initialized():
-    dist.init_process_group()
+    dist.init_process_group(timeout=timedelta(minutes=2))
 from maskrcnn_benchmark.utils.comm import get_world_size, is_main_process
 from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 

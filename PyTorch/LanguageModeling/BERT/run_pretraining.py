@@ -46,8 +46,9 @@ from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from utils import is_main_process, format_step, get_world_size, get_rank
 #from apex.parallel import DistributedDataParallel as DDP
 import smdistributed.dataparallel.torch.distributed as herring
+from datetime import timedelta
 if not herring.is_initialized():
-    herring.init_process_group()
+    herring.init_process_group(timeout=timedelta(minutes=2))
 
 from smdistributed.dataparallel.torch.parallel import DistributedDataParallel as DDP
 from schedulers import LinearWarmUpScheduler
