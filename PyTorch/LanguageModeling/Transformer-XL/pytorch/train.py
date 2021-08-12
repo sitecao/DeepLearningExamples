@@ -24,6 +24,8 @@ import shutil
 import sys
 import time
 
+os.chdir('/workspace/transformer-xl/pytorch')
+
 import dllogger
 import numpy as np
 import torch
@@ -31,7 +33,12 @@ import torch.nn as nn
 import torch.optim as optim
 import yaml
 from apex import amp
-from torch.nn.parallel import DistributedDataParallel
+#from torch.nn.parallel import DistributedDataParallel
+import smdistributed.dataparallel.torch.distributed as dist
+from smdistributed.dataparallel.torch.parallel.distributed import DistributedDataParallel
+
+if not dist.is_initialized():
+    dist.init_process_group()
 
 import lamb
 import utils
@@ -231,9 +238,9 @@ def parse_args():
     val.add_argument('--eval_interval', type=int, default=5000,
                      help='Evaluation interval')
 
-    dist = parser.add_argument_group('distributed setup')
-    dist.add_argument('--local_rank',  type=int,
-                      default=os.getenv('LOCAL_RANK', 0),
+    distr = parser.add_argument_group('distributed setup')
+    distr.add_argument('--local_rank',  type=int,
+                      default=dist.get_local_rank(),
                       help='Used for multi-process training.')
 
     parser.set_defaults(**config)
@@ -602,11 +609,11 @@ def main():
     args = parse_args()
     utils.gpu_affinity.set_affinity(args.local_rank)
 
-    # Initialize device and distributed backend
+    # Initialize device
     torch.cuda.set_device(args.local_rank)
     l2_promote()
     device = torch.device('cuda' if args.cuda else 'cpu')
-    utils.distributed.init_distributed(args.cuda)
+    # utils.distributed.init_distributed(args.cuda)
 
     args.work_dir = utils.exp_utils.build_work_dir_name(args.work_dir,
                                                         args.dataset,
@@ -779,12 +786,12 @@ def main():
             opt_level=args.amp_mode,
             )
 
-    if args.multi_gpu == 'ddp' and torch.distributed.is_initialized():
+    if args.multi_gpu == 'ddp' and dist.is_initialized():
         para_model = DistributedDataParallel(model,
                                              device_ids=[args.local_rank],
                                              output_device=args.local_rank,
                                              broadcast_buffers=False,
-                                             find_unused_parameters=True,
+                                             find_unused_parameters=False,
                                              )
     elif args.multi_gpu == 'dp':
         if args.gpu0_bsz >= 0:
@@ -990,3 +997,4 @@ if __name__ == "__main__":
     # code, but it is still valid.
     amp.register_half_function(torch, 'einsum')
     main()
+
