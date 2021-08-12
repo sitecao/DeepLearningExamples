@@ -24,8 +24,6 @@ import shutil
 import sys
 import time
 
-os.chdir('/workspace/transformer-xl/pytorch')
-
 import dllogger
 import numpy as np
 import torch
