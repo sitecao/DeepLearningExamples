@@ -20,3 +20,4 @@ pip --no-cache-dir --no-cache install \
 pip --no-cache-dir --no-cache install \
     'git+https://github.com/NVIDIA/dllogger'
 
+pip install tensorflow-io --no-deps
