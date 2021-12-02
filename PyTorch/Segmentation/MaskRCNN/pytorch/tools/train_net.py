@@ -41,13 +41,16 @@ from maskrcnn_benchmark.utils.logger import format_step
 
 # See if we can use apex.DistributedDataParallel instead of the torch default,
 # and enable mixed-precision via apex.amp
-try:
-    from apex import amp
-    use_amp = True
-except ImportError:
-    print('Use APEX for multi-precision via apex.amp')
-    use_amp = False
+#try:
+#    from apex import amp
+#    use_amp = True
+#except ImportError:
+#    print('Use APEX for multi-precision via apex.amp')
+#    use_amp = False
 
+# @zhaoqi pt 1.10 breaks apex amp so stop using it for now
+use_amp = False
+    
 use_apex_ddp = False
 
 def test_and_exchange_map(tester, model, distributed):
