@@ -39,20 +39,6 @@ from maskrcnn_benchmark.utils.logger import format_step
 import dllogger
 from maskrcnn_benchmark.utils.logger import format_step
 
-# See if we can use apex.DistributedDataParallel instead of the torch default,
-# and enable mixed-precision via apex.amp
-#try:
-#    from apex import amp
-#    use_amp = True
-#except ImportError:
-#    print('Use APEX for multi-precision via apex.amp')
-#    use_amp = False
-
-# @zhaoqi pt 1.10 breaks apex amp so stop using it for now
-use_amp = False
-    
-use_apex_ddp = False
-
 def test_and_exchange_map(tester, model, distributed):
     results = tester(model=model, distributed=distributed)
 
@@ -102,15 +88,11 @@ def train(cfg, local_rank, distributed, fp16, dllogger, data_dir, bucket_cap_mb)
     optimizer = make_optimizer(cfg, model)
     scheduler = make_lr_scheduler(cfg, optimizer)
 
-    if use_amp:
-        # Initialize mixed-precision training
-        if fp16:
-            use_mixed_precision = True
-        else:
-            use_mixed_precision = cfg.DTYPE == "float16"
-
-        amp_opt_level = 'O1' if use_mixed_precision else 'O0'
-        model, optimizer = amp.initialize(model, optimizer, opt_level=amp_opt_level)
+    use_amp = False
+    if fp16:
+        use_amp = True
+    else:
+        use_amp = cfg.DTYPE == "float16"
 
     if distributed:
         # Nvidia uses broadcast_buffers=False and said it will be removed if they update BatchNorm stats
