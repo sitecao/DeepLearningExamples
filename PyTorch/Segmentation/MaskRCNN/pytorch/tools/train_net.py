@@ -14,9 +14,9 @@ import functools
 import random
 import numpy as np
 
-print('Before::::', os.environ['NCCL_SOCKET_IFNAME'])
-os.environ['NCCL_SOCKET_IFNAME'] = "^lo,docker"
-print('After:::::', os.environ['NCCL_SOCKET_IFNAME'])
+#print('Before::::', os.environ['NCCL_SOCKET_IFNAME'])
+#os.environ['NCCL_SOCKET_IFNAME'] = "^lo,docker"
+#print('After:::::', os.environ['NCCL_SOCKET_IFNAME'])
 
 import smdistributed.dataparallel.torch.distributed as dist
 if not dist.is_initialized():
