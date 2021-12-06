@@ -39,6 +39,10 @@ from maskrcnn_benchmark.utils.logger import format_step
 import dllogger
 from maskrcnn_benchmark.utils.logger import format_step
 
+print('Before::::', os.environ['NCCL_SOCKET_IFNAME'])
+os.environ['NCCL_SOCKET_IFNAME'] = "^lo,docker"
+print('After:::::', os.environ['NCCL_SOCKET_IFNAME'])
+
 def test_and_exchange_map(tester, model, distributed):
     results = tester(model=model, distributed=distributed)
 
