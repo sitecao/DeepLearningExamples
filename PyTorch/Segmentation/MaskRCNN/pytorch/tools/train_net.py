@@ -18,10 +18,13 @@ import numpy as np
 #os.environ['NCCL_SOCKET_IFNAME'] = "^lo,docker"
 #print('After:::::', os.environ['NCCL_SOCKET_IFNAME'])
 
-import smdistributed.dataparallel.torch.distributed as dist
+#import smdistributed.dataparallel.torch.distributed as dist
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+import torch_smddp
 if not dist.is_initialized():
-    dist.init_process_group()
-from smdistributed.dataparallel.torch.parallel import DistributedDataParallel as DDP
+    dist.init_process_group(backend='smddp')
+#from smdistributed.dataparallel.torch.parallel import DistributedDataParallel as DDP
 
 import torch
 from maskrcnn_benchmark.config import cfg

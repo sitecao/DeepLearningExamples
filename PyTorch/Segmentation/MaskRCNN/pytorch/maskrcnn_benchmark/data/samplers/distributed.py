@@ -5,9 +5,10 @@ import math
 import torch
 import torch.distributed as dist
 from torch.utils.data.sampler import Sampler
-import smdistributed.dataparallel.torch.distributed as herring
-if not herring.is_initialized():
-    herring.init_process_group()
+#import smdistributed.dataparallel.torch.distributed as herring
+import torch_smddp
+if not dist.is_initialized():
+    dist.init_process_group(backend='smddp')
 
 class DistributedSampler(Sampler):
     """Sampler that restricts data loading to a subset of the dataset.
@@ -28,11 +29,11 @@ class DistributedSampler(Sampler):
         if num_replicas is None:
             if not dist.is_available():
                 raise RuntimeError("Requires distributed package to be available")
-            num_replicas = herring.get_world_size()
+            num_replicas = dist.get_world_size()
         if rank is None:
             if not dist.is_available():
                 raise RuntimeError("Requires distributed package to be available")
-            rank = herring.get_rank()
+            rank = dist.get_rank()
         self.dataset = dataset
         self.num_replicas = num_replicas
         self.rank = rank
