@@ -32,7 +32,9 @@ def is_main_process():
 
 
 def is_local_main_process():
-    return dist.get_local_rank() == 0
+    import os
+    local_rank = os.environ['LOCAL_RANK']
+    return local_rank == 0
 
 
 def synchronize():

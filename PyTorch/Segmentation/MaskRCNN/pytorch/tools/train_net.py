@@ -209,7 +209,10 @@ def main():
         help="path to config file",
         type=str,
     )
-    parser.add_argument("--local_rank", type=int, default=dist.get_local_rank())
+
+    import os
+    local_rank = os.environ['LOCAL_RANK']
+    parser.add_argument("--local_rank", type=int, default=local_rank)
     parser.add_argument("--max_steps", type=int, default=0, help="Override number of training steps in the config")
     parser.add_argument("--skip-test", dest="skip_test", help="Do not test the final model",
                         action="store_true",)
