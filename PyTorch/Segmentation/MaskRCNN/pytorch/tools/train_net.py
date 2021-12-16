@@ -284,7 +284,8 @@ def main():
 
     # Redundant option - Override config parameter with command line input
     if args.max_steps > 0:
-        cfg.SOLVER.MAX_ITER = args.max_steps
+        #cfg.SOLVER.MAX_ITER = args.max_steps
+        cfg.SOLVER.MAX_ITER = 100
 
     if args.skip_checkpoint:
         cfg.SAVE_CHECKPOINT = False
