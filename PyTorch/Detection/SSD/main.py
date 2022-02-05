@@ -144,6 +144,7 @@ def train(train_loop_func, logger, args):
         args.seed = (args.seed + torch.distributed.get_rank()) % 2**32
     print("Using seed = {}".format(args.seed))
     torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
     np.random.seed(seed=args.seed)
 
 
@@ -209,18 +210,15 @@ def train(train_loop_func, logger, args):
         end_epoch_time = time.time() - start_epoch_time
         total_time += end_epoch_time
 
-        if args.local_rank == 0:
-            logger.update_epoch_time(epoch, end_epoch_time)
-
-        if epoch in args.evaluation:
-            acc = evaluate(ssd300, val_dataloader, cocoGt, encoder, inv_map, args)
-
-        if args.local_rank == 0:
+        if torch.distributed.get_rank() == 0:
             throughput = train_samples / end_epoch_time
             logger.update_epoch_time(epoch, end_epoch_time)
             logger.update_throughput_speed(epoch, throughput)
 
-        if args.save and args.local_rank == 0:
+        if epoch in args.evaluation:
+            acc = evaluate(ssd300, val_dataloader, cocoGt, encoder, inv_map, args)
+
+	if args.save and args.local_rank == 0:
             print("saving model...")
             obj = {'epoch': epoch + 1,
                    'iteration': iteration,
@@ -236,7 +234,7 @@ def train(train_loop_func, logger, args):
             logger.log('model path', save_path)
         train_loader.reset()
 
-    if args.local_rank == 0:
+    if torch.distributed.get_rank() == 0:
         DLLogger.log((), { 'Total training time': '%.2f' % total_time + ' secs' })
         logger.log_summary()
 
