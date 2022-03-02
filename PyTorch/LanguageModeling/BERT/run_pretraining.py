@@ -44,12 +44,7 @@ from schedulers import PolyWarmUpScheduler
 
 from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from utils import is_main_process, format_step, get_world_size, get_rank
-#from apex.parallel import DistributedDataParallel as DDP
-import smdistributed.dataparallel.torch.distributed as herring
-if not herring.is_initialized():
-    herring.init_process_group()
-
-from smdistributed.dataparallel.torch.parallel import DistributedDataParallel as DDP
+from apex.parallel import DistributedDataParallel as DDP
 from schedulers import LinearWarmUpScheduler
 from apex.parallel.distributed import flat_dist_call
 import amp_C
@@ -58,6 +53,7 @@ from apex.amp import _amp_state
 
 import dllogger
 from concurrent.futures import ProcessPoolExecutor
+import smdistributed.dataparallel.torch.torch_smddp
 
 torch._C._jit_set_profiling_mode(False)
 torch._C._jit_set_profiling_executor(False)
@@ -68,21 +64,27 @@ skipped_steps = 0
 timeout_sent = False
 
 import signal
+
+
 # handle SIGTERM sent from the scheduler and mark so we
 # can gracefully save & exit
 def signal_handler(sig, frame):
     global timeout_sent
     timeout_sent = True
 
+
 signal.signal(signal.SIGTERM, signal_handler)
 
-#Workaround because python functions are not picklable
+
+# Workaround because python functions are not picklable
 class WorkerInitObj(object):
     def __init__(self, seed):
         self.seed = seed
+
     def __call__(self, id):
         np.random.seed(seed=self.seed + id)
         random.seed(self.seed + id)
+
 
 def create_pretraining_dataset(input_file, max_pred_length, shared_list, args, worker_init):
     train_data = pretraining_dataset(input_file=input_file, max_pred_length=max_pred_length)
@@ -92,6 +94,7 @@ def create_pretraining_dataset(input_file, max_pred_length, shared_list, args, w
                                   num_workers=4, worker_init_fn=worker_init,
                                   pin_memory=True)
     return train_dataloader, input_file
+
 
 class pretraining_dataset(Dataset):
 
@@ -109,7 +112,6 @@ class pretraining_dataset(Dataset):
         return len(self.inputs[0])
 
     def __getitem__(self, index):
-
         [input_ids, input_mask, segment_ids, masked_lm_positions, masked_lm_ids, next_sentence_labels] = [
             torch.from_numpy(input[index].astype(np.int64)) if indice < 5 else torch.from_numpy(
                 np.asarray(input[index].astype(np.int64))) for indice, input in enumerate(self.inputs)]
@@ -125,11 +127,13 @@ class pretraining_dataset(Dataset):
         return [input_ids, segment_ids, input_mask,
                 masked_lm_labels, next_sentence_labels]
 
+
 class BertPretrainingCriterion(torch.nn.Module):
     def __init__(self, vocab_size):
         super(BertPretrainingCriterion, self).__init__()
         self.loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-1)
         self.vocab_size = vocab_size
+
     def forward(self, prediction_scores, seq_relationship_score, masked_lm_labels, next_sentence_labels):
         masked_lm_loss = self.loss_fn(prediction_scores.view(-1, self.vocab_size), masked_lm_labels.view(-1))
         next_sentence_loss = self.loss_fn(seq_relationship_score.view(-1, 2), next_sentence_labels.view(-1))
@@ -138,7 +142,6 @@ class BertPretrainingCriterion(torch.nn.Module):
 
 
 def parse_arguments():
-
     parser = argparse.ArgumentParser()
 
     ## Required parameters
@@ -203,7 +206,7 @@ def parse_arguments():
                              "E.g., 0.1 = 10%% of training.")
     parser.add_argument("--local_rank",
                         type=int,
-                        default=herring.get_local_rank(),
+                        default=os.getenv('LOCAL_RANK', -1),
                         help="local_rank for distributed training on gpus")
     parser.add_argument('--seed',
                         type=int,
@@ -265,7 +268,7 @@ def parse_arguments():
                         help="Number of training steps in Phase1 - seq len 128")
     parser.add_argument('--init_loss_scale',
                         type=int,
-                        default=2**20,
+                        default=2 ** 20,
                         help="Initial loss scaler value")
     parser.add_argument("--do_train",
                         default=False,
@@ -283,8 +286,6 @@ def parse_arguments():
                         help='Disable tqdm progress bar')
     parser.add_argument('--steps_this_run', type=int, default=-1,
                         help='If provided, only run this many steps before exiting')
-    parser.add_argument('--bucket_cap_mb', type=int, default=25,
-                        help='If provided, only run this many steps before exiting')
 
     args = parser.parse_args()
     args.fp16 = args.fp16 or args.amp
@@ -294,8 +295,8 @@ def parse_arguments():
 
     return args
 
-def setup_training(args):
 
+def setup_training(args):
     assert (torch.cuda.is_available())
 
     if args.local_rank == -1:
@@ -307,7 +308,7 @@ def setup_training(args):
         torch.cuda.set_device(args.local_rank)
         device = torch.device("cuda", args.local_rank)
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-        # torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        torch.distributed.init_process_group(backend='smddp', init_method='env://')
         args.n_gpu = 1
 
     if args.gradient_accumulation_steps == 1:
@@ -345,8 +346,8 @@ def setup_training(args):
 
     return device, args
 
-def prepare_model_and_optimizer(args, device):
 
+def prepare_model_and_optimizer(args, device):
     # Prepare model
     config = modeling.BertConfig.from_json_file(args.config_file)
 
@@ -395,9 +396,11 @@ def prepare_model_and_optimizer(args, device):
     if args.fp16:
 
         if args.loss_scale == 0:
-            model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale="dynamic", cast_model_outputs=torch.float16)
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale="dynamic",
+                                              cast_model_outputs=torch.float16)
         else:
-            model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale=args.loss_scale, cast_model_outputs=torch.float16)
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale=args.loss_scale,
+                                              cast_model_outputs=torch.float16)
         amp._amp_state.loss_scalers[0]._loss_scale = args.init_loss_scale
 
     model.checkpoint_activations(args.checkpoint_activations)
@@ -405,7 +408,7 @@ def prepare_model_and_optimizer(args, device):
     if args.resume_from_checkpoint:
         if args.phase2 or args.init_checkpoint:
             keys = list(checkpoint['optimizer']['state'].keys())
-            #Override hyperparameters from previous checkpoint
+            # Override hyperparameters from previous checkpoint
             for key in keys:
                 checkpoint['optimizer']['state'][key]['step'] = global_step
             for iter, item in enumerate(checkpoint['optimizer']['param_groups']):
@@ -425,10 +428,9 @@ def prepare_model_and_optimizer(args, device):
 
     if args.local_rank != -1:
         if not args.allreduce_post_accumulation:
-            # model = DDP(model, message_size=250000000, gradient_predivide_factor=get_world_size())
-            model = DDP(model, bucket_cap_mb=args.bucket_cap_mb)
+            model = DDP(model, message_size=250000000, gradient_predivide_factor=get_world_size())
         else:
-            flat_dist_call([param.data for param in model.parameters()], herring.broadcast, (0,) )
+            flat_dist_call([param.data for param in model.parameters()], torch.distributed.broadcast, (0,))
     elif args.n_gpu > 1:
         model = torch.nn.DataParallel(model)
 
@@ -436,8 +438,8 @@ def prepare_model_and_optimizer(args, device):
 
     return model, optimizer, lr_scheduler, checkpoint, global_step, criterion
 
-def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
 
+def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
     global skipped_steps
     if args.allreduce_post_accumulation:
         # manually allreduce gradients after all accumulation steps
@@ -452,17 +454,17 @@ def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
         allreduced_views = apex_C.unflatten(flat_raw, master_grads)
         overflow_buf.zero_()
         amp_C.multi_tensor_scale(65536,
-            overflow_buf,
-            [master_grads, allreduced_views],
-            loss_scale / (get_world_size() * args.gradient_accumulation_steps))
+                                 overflow_buf,
+                                 [master_grads, allreduced_views],
+                                 loss_scale / (get_world_size() * args.gradient_accumulation_steps))
         # 3. sum gradient across ranks. Because of the predivision, this averages the gradient
-        herring.all_reduce(flat_raw)
+        torch.distributed.all_reduce(flat_raw)
         # 4. combine unscaling and unflattening of allreduced gradient
         overflow_buf.zero_()
         amp_C.multi_tensor_scale(65536,
-            overflow_buf,
-            [allreduced_views, master_grads],
-            1./loss_scale)
+                                 overflow_buf,
+                                 [allreduced_views, master_grads],
+                                 1. / loss_scale)
         # 5. update loss scale
         if args.fp16:
             scaler = _amp_state.loss_scalers[0]
@@ -489,12 +491,13 @@ def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
             param.grad = None
     else:
         optimizer.step()
-        #optimizer.zero_grad()
+        # optimizer.zero_grad()
         for param in model.parameters():
             param.grad = None
         global_step += 1
 
     return global_step
+
 
 def main():
     global timeout_sent
@@ -535,7 +538,8 @@ def main():
         while True:
             thread = None
             restored_data_loader = None
-            if not args.resume_from_checkpoint or epoch > 0 or (args.phase2 and global_step < 1) or args.init_checkpoint:
+            if not args.resume_from_checkpoint or epoch > 0 or (
+                    args.phase2 and global_step < 1) or args.init_checkpoint:
                 files = [os.path.join(args.input_dir, f) for f in os.listdir(args.input_dir) if
                          os.path.isfile(os.path.join(args.input_dir, f)) and 'training' in f]
                 files.sort()
@@ -553,11 +557,11 @@ def main():
 
             shared_file_list = {}
 
-            if get_world_size() > num_files:
+            if torch.distributed.is_initialized() and get_world_size() > num_files:
                 remainder = get_world_size() % num_files
-                data_file = files[(f_start_id*get_world_size()+get_rank() + remainder*f_start_id)%num_files]
+                data_file = files[(f_start_id * get_world_size() + get_rank() + remainder * f_start_id) % num_files]
             else:
-                data_file = files[(f_start_id*get_world_size()+get_rank())%num_files]
+                data_file = files[(f_start_id * get_world_size() + get_rank()) % num_files]
 
             previous_file = data_file
 
@@ -580,15 +584,17 @@ def main():
             for f_id in range(f_start_id + 1, len(files)):
 
                 if get_world_size() > num_files:
-                    data_file = files[(f_id*get_world_size()+get_rank() + remainder*f_id) % num_files]
+                    data_file = files[(f_id * get_world_size() + get_rank() + remainder * f_id) % num_files]
                 else:
-                    data_file = files[(f_id*get_world_size()+get_rank()) % num_files]
+                    data_file = files[(f_id * get_world_size() + get_rank()) % num_files]
 
                 previous_file = data_file
 
-                dataset_future = pool.submit(create_pretraining_dataset, data_file, args.max_predictions_per_seq, shared_file_list, args, worker_init)
+                dataset_future = pool.submit(create_pretraining_dataset, data_file, args.max_predictions_per_seq,
+                                             shared_file_list, args, worker_init)
 
-                train_iter = tqdm(train_dataloader, desc="Iteration", disable=args.disable_progress_bar) if is_main_process() else train_dataloader
+                train_iter = tqdm(train_dataloader, desc="Iteration",
+                                  disable=args.disable_progress_bar) if is_main_process() else train_dataloader
 
                 if raw_train_start is None:
                     raw_train_start = time.time()
@@ -597,7 +603,8 @@ def main():
                     training_steps += 1
                     batch = [t.to(device) for t in batch]
                     input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch
-                    prediction_scores, seq_relationship_score = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask)
+                    prediction_scores, seq_relationship_score = model(input_ids=input_ids, token_type_ids=segment_ids,
+                                                                      attention_mask=input_mask)
                     loss = criterion(prediction_scores, seq_relationship_score, masked_lm_labels, next_sentence_labels)
                     if args.n_gpu > 1:
                         loss = loss.mean()  # mean() to average on multi-gpu.
@@ -609,7 +616,8 @@ def main():
                             loss = loss / args.gradient_accumulation_steps
                             divisor = 1.0
                     if args.fp16:
-                        with amp.scale_loss(loss, optimizer, delay_overflow_check=args.allreduce_post_accumulation) as scaled_loss:
+                        with amp.scale_loss(loss, optimizer,
+                                            delay_overflow_check=args.allreduce_post_accumulation) as scaled_loss:
                             scaled_loss.backward()
                     else:
                         loss.backward()
@@ -625,20 +633,19 @@ def main():
                         last_num_steps = args.log_freq if last_num_steps == 0 else last_num_steps
                         average_loss = torch.tensor(average_loss, dtype=torch.float32).cuda()
                         average_loss = average_loss / (last_num_steps * divisor)
-                        # if (torch.distributed.is_initialized()):
-                        average_loss /= get_world_size()
-                        herring.all_reduce(average_loss)
-                        # torch.distributed.all_reduce(average_loss)
+                        if (torch.distributed.is_initialized()):
+                            average_loss /= get_world_size()
+                            torch.distributed.all_reduce(average_loss)
                         final_loss = average_loss.item()
                         if is_main_process():
-                            dllogger.log(step=(epoch, global_step, ), data={"final_loss": final_loss})
+                            dllogger.log(step=(epoch, global_step,), data={"final_loss": final_loss})
                     elif training_steps % (args.log_freq * args.gradient_accumulation_steps) == 0:
                         if is_main_process():
-                            dllogger.log(step=(epoch, global_step, ), data={"average_loss": average_loss / (args.log_freq * divisor),
-                                                                            "step_loss": loss.item() * args.gradient_accumulation_steps / divisor,
-                                                                            "learning_rate": optimizer.param_groups[0]['lr']})
+                            dllogger.log(step=(epoch, global_step,),
+                                         data={"average_loss": average_loss / (args.log_freq * divisor),
+                                               "step_loss": loss.item() * args.gradient_accumulation_steps / divisor,
+                                               "learning_rate": optimizer.param_groups[0]['lr']})
                         average_loss = 0
-
 
                     if global_step >= args.steps_this_run or training_steps % (
                             args.num_steps_per_checkpoint * args.gradient_accumulation_steps) == 0 or timeout_sent:
@@ -650,14 +657,16 @@ def main():
                             if args.resume_step < 0 or not args.phase2:
                                 output_save_file = os.path.join(args.output_dir, "ckpt_{}.pt".format(global_step))
                             else:
-                                output_save_file = os.path.join(args.output_dir, "ckpt_{}.pt".format(global_step + args.phase1_end_step))
+                                output_save_file = os.path.join(args.output_dir,
+                                                                "ckpt_{}.pt".format(global_step + args.phase1_end_step))
                             if args.do_train:
                                 torch.save({'model': model_to_save.state_dict(),
                                             'optimizer': optimizer.state_dict(),
                                             'master params': list(amp.master_params(optimizer)),
                                             'files': [f_id] + files,
                                             'epoch': epoch,
-                                            'data_loader': None if global_step >= args.max_steps else train_dataloader}, output_save_file)
+                                            'data_loader': None if global_step >= args.max_steps else train_dataloader},
+                                           output_save_file)
 
                                 most_recent_ckpts_paths.append(output_save_file)
                                 if len(most_recent_ckpts_paths) > 3:
@@ -688,12 +697,12 @@ if __name__ == "__main__":
     global_step += args.phase1_end_step if (args.phase2 and args.resume_step > 0) else 0
     if args.resume_step == -1:
         args.resume_step = 0
-    # if torch.distributed.is_initialized():
-    gpu_count = get_world_size()
+    if torch.distributed.is_initialized():
+        gpu_count = get_world_size()
     if is_main_process():
         e2e_time = time.time() - now
-        training_perf = args.train_batch_size * args.gradient_accumulation_steps * gpu_count\
+        training_perf = args.train_batch_size * args.gradient_accumulation_steps * gpu_count \
                         * (global_step - args.resume_step + skipped_steps) / train_time_raw
         dllogger.log(step=tuple(), data={"e2e_train_time": e2e_time, "training_sequences_per_second": training_perf,
-                                         "final_loss": final_loss, "raw_train_time": train_time_raw })
+                                         "final_loss": final_loss, "raw_train_time": train_time_raw})
     dllogger.flush()

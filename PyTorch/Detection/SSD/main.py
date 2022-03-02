@@ -18,12 +18,8 @@ from argparse import ArgumentParser
 import torch
 import numpy as np
 from torch.optim.lr_scheduler import MultiStepLR
-
-import smdistributed.dataparallel.torch.distributed as herring
-if not herring.is_initialized():
-    herring.init_process_group()
-
 import torch.utils.data.distributed
+
 from src.model import SSD300, ResNet, Loss
 from src.utils import dboxes300_coco, Encoder
 from src.logger import Logger, BenchLogger
@@ -32,14 +28,13 @@ from src.train import train_loop, tencent_trick, load_checkpoint, benchmark_trai
 from src.data import get_train_loader, get_val_dataset, get_val_dataloader, get_coco_ground_truth
 
 import dllogger as DLLogger
-
+import smdistributed.dataparallel.torch.torch_smddp
 
 # Apex imports
 try:
     from apex.parallel.LARC import LARC
     from apex import amp
-    # from apex.parallel import DistributedDataParallel as DDP
-    from smdistributed.dataparallel.torch.parallel import DistributedDataParallel as DDP
+    from apex.parallel import DistributedDataParallel as DDP
     from apex.fp16_utils import *
 except ImportError:
     raise ImportError("Please install APEX from https://github.com/nvidia/apex")
@@ -118,7 +113,7 @@ def make_parser():
                              'the specified file.')
 
     # Distributed
-    parser.add_argument('--local_rank', default=herring.get_local_rank(), type=int,
+    parser.add_argument('--local_rank', default=os.getenv('LOCAL_RANK',0), type=int,
                         help='Used for multi-process training. Can either be manually set ' +
                              'or automatically set by using \'python -m multiproc\'.')
 
@@ -132,17 +127,13 @@ def train(train_loop_func, logger, args):
 
     # Setup multi-GPU if necessary
     args.distributed = False
-    # if 'WORLD_SIZE' in os.environ:
-    #     args.distributed = int(os.environ['WORLD_SIZE']) > 1
-
-    num_gpus = herring.get_world_size()
-    args.distributed = num_gpus > 1
+    if 'WORLD_SIZE' in os.environ:
+        args.distributed = int(os.environ['WORLD_SIZE']) > 1
 
     if args.distributed:
         torch.cuda.set_device(args.local_rank)
-        # torch.distributed.init_process_group(backend='nccl', init_method='env://')
-        # args.N_gpu = torch.distributed.get_world_size()
-        args.N_gpu = herring.get_world_size()
+        torch.distributed.init_process_group(backend='smddp', init_method='env://')
+        args.N_gpu = torch.distributed.get_world_size()
     else:
         args.N_gpu = 1
 
@@ -150,8 +141,7 @@ def train(train_loop_func, logger, args):
         args.seed = np.random.randint(1e4)
 
     if args.distributed:
-        # args.seed = (args.seed + torch.distributed.get_rank()) % 2**32
-        args.seed = (args.seed + herring.get_rank()) % 2 ** 32
+        args.seed = (args.seed + torch.distributed.get_rank()) % 2**32
     print("Using seed = {}".format(args.seed))
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
@@ -185,7 +175,7 @@ def train(train_loop_func, logger, args):
         ssd300, optimizer = amp.initialize(ssd300, optimizer, opt_level='O2')
 
     if args.distributed:
-        ssd300 = DDP(ssd300, broadcast_buffers=False)
+        ssd300 = DDP(ssd300)
 
     if args.checkpoint is not None:
         if os.path.isfile(args.checkpoint):
@@ -220,7 +210,7 @@ def train(train_loop_func, logger, args):
         end_epoch_time = time.time() - start_epoch_time
         total_time += end_epoch_time
 
-        if herring.get_rank() == 0:
+        if torch.distributed.get_rank() == 0:
             throughput = train_samples / end_epoch_time
             logger.update_epoch_time(epoch, end_epoch_time)
             logger.update_throughput_speed(epoch, throughput)
@@ -228,10 +218,7 @@ def train(train_loop_func, logger, args):
         if epoch in args.evaluation:
             acc = evaluate(ssd300, val_dataloader, cocoGt, encoder, inv_map, args)
 
-            if args.local_rank == 0:
-                logger.update_epoch(epoch, acc)
-
-        if args.save and args.local_rank == 0:
+	if args.save and args.local_rank == 0:
             print("saving model...")
             obj = {'epoch': epoch + 1,
                    'iteration': iteration,
@@ -246,7 +233,8 @@ def train(train_loop_func, logger, args):
             torch.save(obj, save_path)
             logger.log('model path', save_path)
         train_loader.reset()
-    if herring.get_rank() == 0:
+
+    if torch.distributed.get_rank() == 0:
         DLLogger.log((), { 'Total training time': '%.2f' % total_time + ' secs' })
         logger.log_summary()
 
