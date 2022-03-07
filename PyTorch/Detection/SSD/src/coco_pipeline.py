@@ -28,10 +28,6 @@ import nvidia.dali.types as types
 
 import time
 
-import smdistributed.dataparallel.torch.distributed as herring
-if not herring.is_initialized():
-    herring.init_process_group()
-
 
 class COCOPipeline(Pipeline):
     def __init__(self, batch_size, device_id, file_root, annotations_file, num_gpus,

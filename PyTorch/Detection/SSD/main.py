@@ -218,7 +218,7 @@ def train(train_loop_func, logger, args):
         if epoch in args.evaluation:
             acc = evaluate(ssd300, val_dataloader, cocoGt, encoder, inv_map, args)
 
-	if args.save and args.local_rank == 0:
+        if args.save and args.local_rank == 0:
             print("saving model...")
             obj = {'epoch': epoch + 1,
                    'iteration': iteration,
