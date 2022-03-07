@@ -51,10 +51,7 @@ def get_val_dataset(args):
 
 def get_val_dataloader(dataset, args):
     if args.distributed:
-        val_sampler = torch.utils.data.distributed.DistributedSampler(
-                            dataset,
-                            num_replicas=herring.get_world_size(),
-                            rank=herring.get_rank())
+        val_sampler = torch.utils.data.distributed.DistributedSampler(dataset)
     else:
         val_sampler = None
 
