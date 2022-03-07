@@ -14,15 +14,6 @@ import functools
 import random
 import numpy as np
 
-#print('Before::::', os.environ['NCCL_SOCKET_IFNAME'])
-#os.environ['NCCL_SOCKET_IFNAME'] = "^lo,docker"
-#print('After:::::', os.environ['NCCL_SOCKET_IFNAME'])
-
-import smdistributed.dataparallel.torch.distributed as dist
-if not dist.is_initialized():
-    dist.init_process_group()
-from smdistributed.dataparallel.torch.parallel import DistributedDataParallel as DDP
-
 import torch
 from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.data import make_data_loader
@@ -39,10 +30,19 @@ from maskrcnn_benchmark.utils.logger import setup_logger
 from maskrcnn_benchmark.utils.miscellaneous import mkdir
 from maskrcnn_benchmark.engine.tester import test
 from maskrcnn_benchmark.utils.logger import format_step
-
+#from dllogger import Logger, StdOutBackend, JSONStreamBackend, Verbosity
+#import dllogger as DLLogger
 import dllogger
 from maskrcnn_benchmark.utils.logger import format_step
+import smdistributed.dataparallel.torch.torch_smddp
 
+# See if we can use apex.DistributedDataParallel instead of the torch default
+try:
+    from apex.parallel import DistributedDataParallel as DDP
+    use_apex_ddp = True
+except ImportError:
+    print('Use APEX for better performance')
+    use_apex_ddp = False
 
 def test_and_exchange_map(tester, model, distributed):
     results = tester(model=model, distributed=distributed)
@@ -85,7 +85,8 @@ def mlperf_test_early_exit(iteration, iters_per_epoch, tester, model, distribute
 
     return False
 
-def train(cfg, local_rank, distributed, fp16, dllogger, data_dir, bucket_cap_mb):
+
+def train(cfg, local_rank, distributed, fp16, dllogger, data_dir):
     model = build_detection_model(cfg)
     device = torch.device(cfg.MODEL.DEVICE)
     model.to(device)
@@ -100,16 +101,20 @@ def train(cfg, local_rank, distributed, fp16, dllogger, data_dir, bucket_cap_mb)
         use_amp = cfg.DTYPE == "float16"
 
     if distributed:
-        # Nvidia uses broadcast_buffers=False and said it will be removed if they update BatchNorm stats
-        # We will keep it false for consistency
-        model = DDP(model, device_ids=[local_rank], broadcast_buffers=False, bucket_cap_mb=bucket_cap_mb)
+        if use_apex_ddp:
+            model = DDP(model, delay_allreduce=True)
+        else:
+            model = torch.nn.parallel.DistributedDataParallel(
+                model, device_ids=[local_rank], output_device=local_rank,
+                # this should be removed if we update BatchNorm stats
+                broadcast_buffers=False)
 
     arguments = {}
     arguments["iteration"] = 0
 
     output_dir = cfg.OUTPUT_DIR
 
-    save_to_disk = dist.get_rank() == 0
+    save_to_disk = get_rank() == 0
     checkpointer = DetectronCheckpointer(
         cfg, model, optimizer, scheduler, output_dir, save_to_disk
     )
@@ -121,7 +126,7 @@ def train(cfg, local_rank, distributed, fp16, dllogger, data_dir, bucket_cap_mb)
         is_train=True,
         is_distributed=distributed,
         start_iter=arguments["iteration"],
-        data_dir = data_dir
+        data_dir = data_dir,
     )
 
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
@@ -206,7 +211,7 @@ def main():
         help="path to config file",
         type=str,
     )
-    parser.add_argument("--local_rank", type=int, default=dist.get_local_rank())
+    parser.add_argument("--local_rank", type=int, default=os.getenv('LOCAL_RANK', 0))
     parser.add_argument("--max_steps", type=int, default=0, help="Override number of training steps in the config")
     parser.add_argument("--skip-test", dest="skip_test", help="Do not test the final model",
                         action="store_true",)
@@ -230,48 +235,31 @@ def main():
         default=None
     )
     parser.add_argument(
-        "--bucket-cap-mb",
-        dest="bucket_cap_mb",
-        help="specify bucket size for smddp",
-        default=25,
-        type=int,
-    )
-    parser.add_argument(
         "--seed",
         help="manually set random seed for torch",
         type=int,
         default=99
     )
-    parser.add_argument(
-        "--batch-size-per-gpu",
-        help="per gpu batch size",
-        type=int,
-        default=4
-    )
-    parser.add_argument(
-        "--lr-multiplier",
-        help="base lr multiplier",
-        type=float,
-        default=0.000625
-    )
     args = parser.parse_args()
-    args.fp16 = args.fp16 or args.amp
-
-    keys = list(os.environ.keys())
-    args.data_dir = os.environ[
-        'SM_CHANNEL_TRAIN'] if 'SM_CHANNEL_TRAIN' in keys else args.data_dir
 
     # Set seed to reduce randomness
+    print("Seed: {}\tLocal Rank: {}".format(args.seed, args.local_rank))
     random.seed(args.seed + args.local_rank)
     np.random.seed(args.seed + args.local_rank)
     torch.manual_seed(args.seed + args.local_rank)
     torch.cuda.manual_seed(args.seed + args.local_rank)
 
-    num_gpus = dist.get_world_size()
+    args.fp16 = args.fp16 or args.amp
+
+    num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
     args.distributed = num_gpus > 1
 
     if args.distributed:
         torch.cuda.set_device(args.local_rank)
+        torch.distributed.init_process_group(
+            backend="smddp", init_method="env://"
+        )
+        synchronize()
 
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
@@ -282,16 +270,6 @@ def main():
 
     if args.skip_checkpoint:
         cfg.SAVE_CHECKPOINT = False
-
-    # Default use bs=4 and lr=0.04 for 64 GPU, multiply it for multi-mode and override cfg to reuse same config file
-    # bs=4 is based on Nvidia recommendation in configs/e2e_mask_rcnn_R_50_FPN_1x_1GPU.yaml
-    # base_lr=0.04 for 64 GPU is a safe lr to prevent divergence
-    cfg.SOLVER.IMS_PER_BATCH = num_gpus * args.batch_size_per_gpu
-    cfg.SOLVER.BASE_LR = num_gpus * args.lr_multiplier
-
-    if is_main_process():
-        print('Configuration to use')
-        print(cfg)
 
     cfg.freeze()
 
@@ -321,7 +299,7 @@ def main():
     else:
         fp16 = False
 
-    model, iters_per_epoch = train(cfg, args.local_rank, args.distributed, fp16, dllogger, args.data_dir, args.bucket_cap_mb)
+    model, iters_per_epoch = train(cfg, args.local_rank, args.distributed, fp16, dllogger, args.data_dir)
 
     if not args.skip_test:
         if not cfg.PER_EPOCH_EVAL:
