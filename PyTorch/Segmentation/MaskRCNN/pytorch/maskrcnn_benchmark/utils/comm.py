@@ -6,10 +6,11 @@ This is useful when doing distributed training.
 
 import pickle
 import time
+import os
 
 import torch
+import torch.distributed as dist
 
-import smdistributed.dataparallel.torch.distributed as dist
 
 def get_world_size():
     if not dist.is_available():
@@ -32,7 +33,7 @@ def is_main_process():
 
 
 def is_local_main_process():
-    return dist.get_local_rank() == 0
+    return int(os.environ['LOCAL_RANK']) == 0
 
 
 def synchronize():
