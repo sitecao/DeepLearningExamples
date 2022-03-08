@@ -6,9 +6,7 @@ import time
 
 import torch
 import torch.distributed as dist
-import smdistributed.dataparallel.torch.distributed as dist
-if not dist.is_initialized():
-    dist.init_process_group()
+
 from maskrcnn_benchmark.utils.comm import get_world_size, is_main_process
 from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 
@@ -29,34 +27,35 @@ def reduce_loss_dict(loss_dict):
             loss_names.append(k)
             all_losses.append(loss_dict[k])
         all_losses = torch.stack(all_losses, dim=0)
-        #dist.reduce(all_losses, dst=0)
-        herring.all_reduce(all_losses)
-        #if herring.get_rank() == 0:
+        dist.reduce(all_losses, dst=0)
+        if dist.get_rank() == 0:
             # only main process gets accumulated, so only divide by
             # world_size in this case
-        all_losses /= world_size
+            all_losses /= world_size
         reduced_losses = {k: v for k, v in zip(loss_names, all_losses)}
     return reduced_losses
 
 
 def do_train(
-    model,
-    data_loader,
-    optimizer,
-    scheduler,
-    checkpointer,
-    device,
-    checkpoint_period,
-    arguments,
-    use_amp,
-    cfg,
-    dllogger=None,
-    per_iter_end_callback_fn=None,
+        model,
+        data_loader,
+        optimizer,
+        scheduler,
+        checkpointer,
+        device,
+        checkpoint_period,
+        arguments,
+        use_amp,
+        cfg,
+        dllogger,
+        per_iter_end_callback_fn=None,
 ):
+    dllogger.log(step="PARAMETER", data={"train_start": True})
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
     logger.info("Start training")
     meters = MetricLogger(delimiter="  ")
     max_iter = len(data_loader)
+    print("max_iter: ", max_iter)
     start_iter = arguments["iteration"]
     model.train()
     start_training_time = time.time()
@@ -81,10 +80,9 @@ def do_train(
         losses = sum(loss for loss in loss_dict.values())
 
         # reduce losses over all GPUs for logging purposes
-        #loss_dict_reduced = reduce_loss_dict(loss_dict)
-        #losses_reduced = sum(loss for loss in loss_dict_reduced.values())
-        meters.update(loss=losses, **loss_dict)
-
+        loss_dict_reduced = reduce_loss_dict(loss_dict)
+        losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+        meters.update(loss=losses_reduced, **loss_dict_reduced)
 
         # Note: If mixed precision is not used, this ends up doing nothing
         # Otherwise apply loss scaling for mixed-precision recipe
@@ -92,7 +90,7 @@ def do_train(
             scaler.scale(losses).backward()
         else:
             losses.backward()
-        
+
         def _take_step():
             if use_amp:
                 scaler.step(optimizer)
@@ -110,14 +108,14 @@ def do_train(
                     if param.grad is not None:
                         param.grad.data.div_(cfg.SOLVER.ACCUMULATE_STEPS)
                 _take_step()
-        
+
         batch_time = time.time() - end
         end = time.time()
 
         if iteration % 5 == 0 and is_main_process():
             logger.info("iter: %d batch_time: %f" % (iteration, batch_time))
 
-        if(iteration > 500):
+        if (iteration > 500):
             meters.update(time=batch_time, data=data_time)
 
             eta_seconds = meters.time.global_avg * (max_iter - iteration)
@@ -139,8 +137,8 @@ def do_train(
                     ).format(
                         eta=eta_string,
                         avg_iter=meters.time.global_avg,
-                        iter_s=1.0/meters.time.global_avg,
-                        speed=1.0/meters.time.global_avg*int(cfg.SOLVER.IMS_PER_BATCH),
+                        iter_s=1.0 / meters.time.global_avg,
+                        speed=1.0 / meters.time.global_avg * int(cfg.SOLVER.IMS_PER_BATCH),
                         iter=iteration,
                         meters=str(meters),
                         lr=optimizer.param_groups[0]["lr"],
