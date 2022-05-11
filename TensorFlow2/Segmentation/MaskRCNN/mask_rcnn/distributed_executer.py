@@ -216,6 +216,7 @@ class BaseExecuter(object):
           elif not use_tf_distributed:
               config.inter_op_parallelism_threads = 4
 
+      config.gpu_options.allow_growth = True
       return config
 
   @abc.abstractmethod
