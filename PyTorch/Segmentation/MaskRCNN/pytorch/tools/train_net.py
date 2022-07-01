@@ -36,13 +36,8 @@ import dllogger
 from maskrcnn_benchmark.utils.logger import format_step
 import smdistributed.dataparallel.torch.torch_smddp
 
-# See if we can use apex.DistributedDataParallel instead of the torch default
-try:
-    from apex.parallel import DistributedDataParallel as DDP
-    use_apex_ddp = True
-except ImportError:
-    print('Use APEX for better performance')
-    use_apex_ddp = False
+# DDP
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 def test_and_exchange_map(tester, model, distributed):
     results = tester(model=model, distributed=distributed)
@@ -101,13 +96,10 @@ def train(cfg, local_rank, distributed, fp16, dllogger, data_dir):
         use_amp = cfg.DTYPE == "float16"
 
     if distributed:
-        if use_apex_ddp:
-            model = DDP(model, delay_allreduce=True)
-        else:
-            model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[local_rank], output_device=local_rank,
-                # this should be removed if we update BatchNorm stats
-                broadcast_buffers=False)
+        model = torch.nn.parallel.DistributedDataParallel(
+            model, device_ids=[local_rank], output_device=local_rank,
+            # this should be removed if we update BatchNorm stats
+            broadcast_buffers=False)
 
     arguments = {}
     arguments["iteration"] = 0
