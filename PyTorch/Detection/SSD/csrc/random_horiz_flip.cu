@@ -19,8 +19,6 @@
 
 #include <ATen/ATen.h>
 #include <ATen/cuda/CUDAContext.h>
-#include <THC/THCNumerics.cuh>
-#include <THC/THC.h>
 
 #include <cuda.h>
 
@@ -154,7 +152,7 @@ std::vector<at::Tensor> random_horiz_flip(
           flip.data<float>(),
           tmp_img.data<scalar_t>(),
           nhwc);
-        THCudaCheck(cudaGetLastError());
+        C10_CUDA_CHECK(cudaGetLastError());
       });
 
   // copy tmp_img -> img
