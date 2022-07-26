@@ -124,7 +124,7 @@ at::Tensor nms_cuda(const at::Tensor boxes, float nms_overlap_thresh) {
     }
   }
 
-  c10::cuda::CUDACachingAllocator::raw_delete(state, mask_dev);
+  c10::cuda::CUDACachingAllocator::raw_delete(mask_dev);
   // TODO improve this part
   return std::get<0>(order_t.index({
                        keep.narrow(/*dim=*/0, /*start=*/0, /*length=*/num_to_keep).to(
