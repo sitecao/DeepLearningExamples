@@ -294,7 +294,7 @@ at::Tensor ROIAlign_forward_cuda(const at::Tensor& input,
          rois.contiguous().data_ptr<scalar_t>(),
          output.data_ptr<scalar_t>());
   });
-  THCudaCheck(cudaGetLastError());
+  C10_CUDA_CHECK(cudaGetLastError());
   return output;
 }
 
