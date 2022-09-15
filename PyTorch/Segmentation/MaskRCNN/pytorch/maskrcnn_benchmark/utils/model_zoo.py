@@ -3,7 +3,7 @@ import os
 import sys
 
 try:
-    from torch.utils.model_zoo import _download_url_to_file
+    from torch.utils.model_zoo import download_url_to_file
     from torch.utils.model_zoo import urlparse
     from torch.utils.model_zoo import HASH_REGEX
 except:
